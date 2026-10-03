@@ -2,7 +2,13 @@
 
 本仓库为第三方二改版本，版本号沿用上游 AlwaysStrong 的 `v1.0.4` 并加 `-omk` 后缀。
 
-## v1.0.4-omk-r10 — 2026-09-30（**尚未打包**）
+> **2026-09-30：公开镜像的 keybox 大规模被吊销，本仓库暂停维护。**
+> 实测证据与理由见 [README.md](README.md) 顶部说明。下面 r9 / r10 两段是停维前的最后两版；
+> 其中 r10 的 `vb_hash` / `vb_key` 钉值通道**未经真机验证**。
+
+## v1.0.4-omk-r10 — 2026-09-30
+
+停维前最后一版。
 
 r9 刷入后设备侧验证通过：两道 keybox 闸门真的生效了（`usable-by-keymint: yes` /
 `revoked-by-google: no`），keybox 已换成未吊销那份 —— 但 DEVICE 与 STRONG 仍然红。关键路径因此从

@@ -1,5 +1,33 @@
 # AlwaysStrong-OMK
 
+## 🛑 不建议使用，维护已暂停（2026-09-30）
+
+公开镜像分发的 keybox 最近被**大规模吊销**，"刷进去就能拿到 STRONG"这个前提已经不成立了。
+下面是这台测试机今天实测到的：
+
+- 设备上那份从 `http://evoker.qzz.io/key` 取来的 keybox（13,579 B，sha256 `286c6680…39d3c`），
+  **ECDSA 与 RSA 两条链的叶证书都在 Google 的吊销名单里**，`REVOKED / KEY_COMPROMISE`。
+- 同一天镜像站换过至少两次 key：13,579 B → 18,108 B → base64 22,572 B（解码 16,927 B）。
+  一份 key 被公开分享，就意味着它随时会进那份名单 —— 这不是模块能修的东西。
+- 换上当时**未吊销**的那份之后，Play Integrity 仍然只给 `MEETS_BASIC_INTEGRITY`。证书链是
+  Google 签发的、`T=TEE`、`Verified`、`deviceLocked: true`、序列号不在名单里。原因是测试机刷的
+  是自定义 ROM，它的 `vbmeta` 根本没有认证块（`algorithm=NONE`，还带着
+  `VERIFICATION_DISABLED + VERITY_DISABLED` 标记），引擎如实上报的引导状态对应不到任何
+  已认证构建。
+
+所以：
+
+- **不建议新装，也不建议继续依赖本模块**去拿 DEVICE / STRONG。决定结果的是密钥与引导链，
+  不是这里的脚本。
+- **本仓库暂停维护**：不再跟进上游、不再定期重打包，issue 和 PR 我可能不会回复。
+- 已经刷上的机器：r9 起模块自己就会校验 keybox（结构 + 吊销名单两道），被吊销的 key 不会被
+  装上，只会保留磁盘上原有的那份并在日志里写清原因。看诊断日志里的 `usable-by-keymint:` 与
+  `revoked-by-google:` 两行，就能判断你那份 key 还有没有救。
+- 最后两个版本的改动见 [CHANGELOG.md](CHANGELOG.md)。r10 的 `vb_hash` / `vb_key` 钉值通道
+  **在真机上还没验证过**，别当成可用功能。
+
+---
+
 **Unofficial AlwaysStrong build whose attestation engine is [OhMyKeymint](https://github.com/qwq233/OhMyKeymint) instead of TEESimulator-RS.**
 
 把 [AlwaysStrong](https://github.com/evoker0/AlwaysStrong) 的硬件密钥证明引擎从 TEESimulator-RS
