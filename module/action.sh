@@ -128,17 +128,47 @@ row "🎯" "${TGT_N:-0} apps > target"
 sleep 1
 
 # --- Step 2: Keybox ---
+# "Contains the string Keybox" is not the question that matters. keymint parses
+# the document and refuses one with an incomplete key entry; when it refuses a
+# keybox it does not keep the previous file — it rewrites its own bundled
+# template (DeviceID="sw", a chain Google cannot verify) and all three Play
+# Integrity verdicts go red. So a malformed file must never be reported as "ok",
+# and when one is already on disk the fetch below is the repair path: it is
+# validated too, and only replaces the file when it is usable.
+KB_CHECK="$MODPATH/keybox_check.sh"
+
+kb_ok() {
+    [ -s "$1" ] || return 1
+    if [ -f "$KB_CHECK" ]; then
+        sh "$KB_CHECK" --quiet "$1" 2>/dev/null && return 0
+        return 1
+    fi
+    head -c 4096 "$1" 2>/dev/null | grep -q "Keybox"
+}
+
+kb_why() {   # first reason a keybox is unusable; empty when it is usable
+    [ -f "$KB_CHECK" ] || { head -c 4096 "$1" 2>/dev/null | grep -q "Keybox" || echo "not a keybox"; return; }
+    sh "$KB_CHECK" "$1" 2>/dev/null | head -n 1
+}
+
 # Custom-keybox mode (WebUI toggle): user supplied their own keybox, so we do
 # NOT fetch/overwrite it. Keep the note short.
 if [ -f "$CONFIG_DIR/custom_keybox" ]; then
-    if [ -s "$CONFIG_DIR/keybox.xml" ] && head -c 4096 "$CONFIG_DIR/keybox.xml" | grep -q "Keybox"; then
+    if kb_ok "$CONFIG_DIR/keybox.xml"; then
         row "🔑" "custom keybox — skip fetch"
         row "ℹ️" "disable in webui for auto"
+    elif [ -s "$CONFIG_DIR/keybox.xml" ]; then
+        # Never silently accept this: the user's own file is the reason the
+        # verdicts are red, and nothing else in the module may overwrite it.
+        row "⚠️" "custom keybox unusable"
+        _why=$(kb_why "$CONFIG_DIR/keybox.xml")
+        [ -n "$_why" ] && row "⚠️" "$(printf '%s' "$_why" | cut -c1-44)"
+        row "ℹ️" "import a valid keybox"
     else
         row "⚠️" "custom keybox not set"
     fi
 elif [ -x "$MODPATH/keybox_fetch.sh" ]; then
-    if [ -s "$CONFIG_DIR/keybox.xml" ] && head -c 4096 "$CONFIG_DIR/keybox.xml" | grep -q "Keybox"; then
+    if kb_ok "$CONFIG_DIR/keybox.xml"; then
         bounded 400 sh "$MODPATH/keybox_fetch.sh" >/dev/null 2>&1 &
         row "🔑" "keybox ok"
     else
@@ -146,10 +176,12 @@ elif [ -x "$MODPATH/keybox_fetch.sh" ]; then
         # unbounded fetch here left the Action stuck on a blank screen.
         row "🔑" "fetching keybox..."
         bounded 400 sh "$MODPATH/keybox_fetch.sh" >/dev/null 2>&1
-        if [ -s "$CONFIG_DIR/keybox.xml" ] && head -c 4096 "$CONFIG_DIR/keybox.xml" | grep -q "Keybox"; then
+        if kb_ok "$CONFIG_DIR/keybox.xml"; then
             row "🔑" "keybox updated"
         else
             row "⚠️" "keybox missing"
+            _why=$(kb_why "$CONFIG_DIR/keybox.xml")
+            [ -n "$_why" ] && row "⚠️" "$(printf '%s' "$_why" | cut -c1-44)"
         fi
     fi
 else

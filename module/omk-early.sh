@@ -53,12 +53,33 @@ fi
 # deliberately NOT pre-created: keymint generates its [crypto] secrets when it
 # writes the file the first time, and inventing them ourselves would break every
 # key created before the next reinstall.
-if [ ! -f "$OMK_RUN_DIR/keybox.xml" ]; then
-    if [ -s "$CONFIG_DIR/keybox.xml" ]; then
-        cp -f "$CONFIG_DIR/keybox.xml" "$OMK_RUN_DIR/keybox.xml" 2>/dev/null
-    elif [ -s "$MODDIR/keybox.xml" ]; then
-        cp -f "$MODDIR/keybox.xml" "$OMK_RUN_DIR/keybox.xml" 2>/dev/null
+#
+# The seed is validated first. This runs before keymint starts, so a file copied
+# here is the one keymint parses on its very first attempt — and a file keymint
+# refuses is worse than no file at all: it rewrites its bundled template
+# (DeviceID="sw") instead of keeping whatever was there, which turns all three
+# Play Integrity verdicts red. Leaving the path empty instead lets keymint create
+# its own template and omk-sync.sh replace it with a good keybox later.
+KB_CHECK="$MODDIR/keybox_check.sh"
+
+kb_usable() {
+    [ -s "$1" ] || return 1
+    if [ -f "$KB_CHECK" ]; then
+        sh "$KB_CHECK" --quiet "$1" 2>/dev/null && return 0
+        return 1
     fi
+    head -c 4096 "$1" 2>/dev/null | grep -q "Keybox"
+}
+
+if [ ! -f "$OMK_RUN_DIR/keybox.xml" ]; then
+    for _kb in "$CONFIG_DIR/keybox.xml" "$MODDIR/keybox.xml"; do
+        [ -s "$_kb" ] || continue
+        if kb_usable "$_kb"; then
+            cp -f "$_kb" "$OMK_RUN_DIR/keybox.xml" 2>/dev/null
+            break
+        fi
+        echo "omk-early: keybox at $_kb is unusable — not seeding it, keymint would fall back to its bundled template" >&2
+    done
 fi
 if [ ! -f "$OMK_RUN_DIR/injector.toml" ] && [ -s "$MODDIR/injector.toml" ]; then
     cp -f "$MODDIR/injector.toml" "$OMK_RUN_DIR/injector.toml" 2>/dev/null

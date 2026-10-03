@@ -15,6 +15,13 @@
 BASE_URL="${KEYBOX_BASE_URL:-http://evoker.qzz.io}"
 KEY_URL="$BASE_URL/key"
 
+# Google's attestation revocation list. The mirror is a shared key, so it is
+# exactly the kind of key that ends up on this list — and a revoked keybox is
+# invisible locally: it parses, keymint loads it, and every Play Integrity
+# verdict is still red because the verdict is decided against this list on
+# Google's servers. Read the same list before trusting a downloaded key.
+STATUS_URL="${KEYBOX_STATUS_URL:-https://android.googleapis.com/attestation/status}"
+
 CONFIG_DIR=/data/adb/tricky_store
 TARGET="$CONFIG_DIR/keybox.xml"
 
@@ -151,7 +158,23 @@ if [ ! -s "$TMP/keybox.xml" ]; then
     log "base64 decode produced empty output — bad payload."
     exit 1
 fi
-if ! head -c 4096 "$TMP/keybox.xml" | grep -q "Keybox"; then
+
+# ---- Validate ----
+# Structure, not the "Keybox" substring: keymint rejects a document it cannot
+# parse and then rewrites its own bundled template instead of keeping the file
+# that was there, which takes every verdict down with it. A payload that only
+# looks like a keybox is therefore worse than no update at all, so it never
+# reaches $TARGET.
+KB_CHECK="$SELF_DIR/keybox_check.sh"
+if [ -f "$KB_CHECK" ]; then
+    _why=$(sh "$KB_CHECK" "$TMP/keybox.xml" 2>&1)
+    if [ $? -ne 0 ]; then
+        log "downloaded keybox is unusable — keeping the one on disk."
+        [ -n "$_why" ] && log "reason: $(printf '%s' "$_why" | tr '\n' ';')"
+        exit 1
+    fi
+elif ! head -c 4096 "$TMP/keybox.xml" | grep -q "Keybox"; then
+    # checker missing (partial install) — keep the old substring test as a floor
     log "decoded payload does not look like a keybox — discarding."
     exit 1
 fi
@@ -164,6 +187,31 @@ DISK_HASH=""
 if [ -n "$DISK_HASH" ] && [ "$DISK_HASH" = "$NEW_XML_HASH" ]; then
     log "already up to date."
     exit 2
+fi
+
+# ---- Revocation check ----
+# Placed after the change check on purpose: this is the only step that needs the
+# network beyond the keybox itself, so it runs only when a genuinely different
+# keybox is about to be installed — not on every hourly pass.
+# Refusing a revoked key is strictly better than installing it: whatever is on
+# disk was already failing the same way, and if the mirror regresses after having
+# served a good key, this is what keeps the good one. A list that cannot be
+# fetched is not a verdict, so the check fails open — it must never be the reason
+# a usable key is not applied.
+KB_REVOKE="$SELF_DIR/keybox_revoke_check.sh"
+if [ -f "$KB_REVOKE" ]; then
+    if try_fetch "$TMP/status.json" "$STATUS_URL"; then
+        _rev=$(sh "$KB_REVOKE" "$TMP/keybox.xml" "$TMP/status.json" 2>&1)
+        _rrc=$?
+        if [ "$_rrc" = 1 ]; then
+            log "downloaded keybox is REVOKED by Google — keeping the one on disk."
+            printf '%s\n' "$_rev" | sed 's/^/keybox_fetch: /' >&2
+            exit 1
+        fi
+        [ "$_rrc" = 0 ] || log "revocation check inconclusive — proceeding."
+    else
+        log "could not fetch Google's revocation list — skipping the revocation check."
+    fi
 fi
 
 # ---- Atomic replace ----

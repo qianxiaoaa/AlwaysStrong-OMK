@@ -94,7 +94,8 @@ install_file "engine.sh" "$MODPATH"
 
 for f in module.prop service.sh post-fs-data.sh action.sh \
          uninstall.sh common_func.sh sepolicy.rule \
-         keybox_fetch.sh build_target_txt.sh status_fetch.sh description.txt \
+         keybox_fetch.sh keybox_check.sh keybox_revoke_check.sh \
+         build_target_txt.sh status_fetch.sh description.txt \
          rom_spoof_block.sh conflict_scan.sh sync_patch.sh \
          pif_native_fetch.sh prop_unify.sh logcat_cleanup.sh collect_logs.sh \
          import_pif.sh reapply_spoof.sh lite_pif_sync.sh \

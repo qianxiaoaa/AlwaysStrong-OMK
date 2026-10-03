@@ -2,6 +2,200 @@
 
 本仓库为第三方二改版本，版本号沿用上游 AlwaysStrong 的 `v1.0.4` 并加 `-omk` 后缀。
 
+## v1.0.4-omk-r10 — 2026-09-30（**尚未打包**）
+
+r9 刷入后设备侧验证通过：两道 keybox 闸门真的生效了（`usable-by-keymint: yes` /
+`revoked-by-google: no`），keybox 已换成未吊销那份 —— 但 DEVICE 与 STRONG 仍然红。关键路径因此从
+"身份材料"转向"被证明的引导完整性"。本版本目前只含**诊断**，行为改动待取证确认后并入。
+
+### 新增
+
+- `collect_logs.sh`：`--- verified boot inputs` 段。把 `ro.boot.vbmeta.digest`、
+  `ro.boot.vbmeta.public_key_digest`、`ro.boot.verifiedbootstate`、`ro.boot.vbmeta.device_state`
+  并排打出来，并**复算 `sha256(vbmeta 分区前 64 KiB)`** 与 digest 比对：两者相等即证明 attestation 里的
+  `VerifiedBootHash` 是 `service.sh` 编造的数，而不是 AVB 度量的摘要。这四个数此前分散在三个文件里，
+  把它们对齐花掉了一整轮排查。
+- `collect_logs.sh`：Module 段新增 `scripts fingerprint`（对模块目录下所有 `.sh` 做
+  `sha256sum | sha256sum` 取前 8 位，含文件名，所以改名/增删/改内容都会让它变）。同一个 `version=`
+  可以对应两份不同的包，这行回答的是"设备上实际是哪份字节"，比版本号可靠。
+- `collect_logs.sh`：`--- level-zero key selection` 段（r9 排查丢库时加的，随本版本出货）。
+- `omk-sync.sh`：`[trust]` 写入器新增 **`vb_hash` / `vb_key` 钉值**。放两个文件
+  `/data/adb/tricky_store/vb_hash`、`/data/adb/tricky_store/vb_key`（各恰好 64 位十六进制）即写入
+  config.toml 并触发 keymint 重启；文件缺失或格式不对时**一律不动这两个键**并在 stderr 说明。
+  这是引擎文档化的路径（`a 64-character hexadecimal string pins an exact value`），比伪造
+  `ro.boot.vbmeta.*` 属性干净——那两个属性真 keystore2 也在读。已测：无覆盖文件时输出与输入
+  逐字节相同（不会白白重启 keymint），重复钉同一值幂等。
+
+### 说明
+
+- **`service.sh:244` 的 digest 算法是错的**：AVB 的 vbmeta digest 是对 vbmeta **结构体**
+  （header + descriptors + auxiliary，长度通常只有几 KB）算的，不是对分区前 64 KiB 原始字节算的。
+  输出同样是 64 位十六进制，所以看不出问题。引擎的 `vb_hash = "auto"` 读的正是这个属性（二进制里
+  能看到它读 `ro.boot.vbmeta.digest` 与 `ro.boot.vbmeta.public_key_digest`）。**但本次它没有参与**：
+  设备上的 `5e44f8ea…` 实测等于 `sha256(该 ROM 的 vbmeta.img 前 6656 字节)`，是内核报的真摘要。
+  这段兜底仍应删（公式无效且会掩盖真值缺失），只是不是病因。
+- `ro.boot.vbmeta.public_key_digest` 引擎会读，但模块从不设置；`omk-sync.sh` 的 `[trust]` 写入器只
+  覆盖 7 个键，`vb_hash`/`vb_key` 不在其中 —— 也就是说这两个键从来没被本模块管过。现已补上钉值支持。
+- **病因（当前唯一被证实的解释）**：测试机刷的是自定义 ROM，其 `vbmeta.img` **没有认证块**（描述符
+  紧跟 256 字节头，即无 hash / 签名 / 公钥）。OMK 如实上报"一个未签名 vbmeta 的正确摘要"，这样的
+  摘要不属于任何已认证构建，所以 DEVICE 拿不到。要改的是**同构建官方签名镜像**的摘要，工具见
+  `tools/avb_digest.py`（已用本机这份 vbmeta 反向验证过边界公式）。
+- **`security_level.rs:404` 与 B 键那条线已结案为噪声**：取到完整 `Caused by` 链后，34 个错误块里
+  20 个是兼容性测试 app 的参数探测被拒（`-11 INCOMPATIBLE_PADDING_MODE`、`-3 INCOMPATIBLE_PURPOSE`、
+  `-21 INVALID_INPUT_LENGTH`，别名 `ChallengeLenTest_*` / `AttestClosure*_*` / `cq_tee_mixed_*`），
+  12 个是**锁屏状态**下访问 UnlockedDeviceRequired 密钥（`super_key.rs:903 Device is locked`、
+  `-26 KEY_USER_NOT_AUTHENTICATED`）。与 Play 判定无关。
+- 顺带修正一处此前写错的注释：`omk-sync.sh` 原话说四个 patchlevel 字段的 `auto` 都读构建属性，实际
+  `boot_patchlevel` 读的是**顶层 vbmeta 里的 `com.android.build.boot.security_patch`**（引擎
+  `docs/CONFIGURATION.md` 确认），所以日志里 `boot_patchlevel 20260901` 与属性 `2026-08-05` 不一致
+  是设计如此，不是缺陷。
+- 本轮排除的两条：**keybox**（链已验证为 Google 签发、未吊销、`T=TEE`、`Verified`、
+  `deviceLocked: true`，且设备上呈现的三张证书与装上的那份 keybox 逐张对上）；**私有存储每次开机
+  重建**（是真缺陷，但 20:11 那次在库自 19:24 起完好时 DEVICE 仍红，故不阻塞判定）。
+- 版本号从 r9 升到 r10 的取舍：r9 从未提交也未发布，本可沿用同号；选升号是因为 r10 动的是另一个
+  子系统，同号会让"哪次刷入对应哪个改动"重新变糊。
+
+## v1.0.4-omk-r9 — 2026-09-30
+
+r8 已经把两道 keybox 校验写进了代码，设备上的诊断却仍然报 `keybox_check.sh not installed`。
+本次接上这条断掉的路，并修掉吊销校验里一处解析缺陷。顺带定案：**设备上那份 keybox 确实已被
+Google 吊销**，r8 记录里的相反结论作废。
+
+### 修复
+
+- **`customize.sh` 的解压白名单漏列两个校验脚本**。`keybox_check.sh` 其实一直在 r8 的 zip
+  里，但 `for f in ...` 那个清单没有它，安装时从不被解压到 `$MODPATH`；
+  `keybox_revoke_check.sh` 当时还是未跟踪文件，根本没进包。后果是设备侧两道闸同时退化 ——
+  `collect_logs.sh` 报 `usable-by-keymint: unknown (keybox_check.sh not installed)`，而
+  `keybox_fetch.sh` 因为 `$SELF_DIR/keybox_check.sh` 不存在，回落到
+  `grep "Keybox"` 这个字符串兜底（它 `elif` 那条分支），一份畸形 keybox 又能走到落盘那一步。
+  现在两个脚本都在清单里，权限由 `build.sh` 既有的 `chmod 0755 "$STAGE"/*.sh` 覆盖。
+- **`keybox_revoke_check.sh` 的 `reason=` 恒为字面量 `REVOKED`**，从没取出过 Google 给的
+  真实原因。列表是缩进 JSON：序列号占一行，`status` 与 `reason` 在其后几行，而原先
+  `grep -m1` 只拿到序列号那一行，随后两个 `sed` 必然落空，最后回落到 `_reason=REVOKED`。
+  现在先 `tr -d '\n\r\t'` 把列表展平一次，再整段匹配 `"<serial>" : { ... }`，两个字段都如实
+  取出（每条记录对象内没有嵌套花括号，`[^}]*` 就到得了结尾）。
+- 同一处改为**只认 `status=REVOKED`**。旧写法只要序列号在册就判命中，而
+  `?includeExpired=true` 端点（本项目备用链接之一，`KEYBOX_STATUS_URL` 可覆盖）里还有
+  `EXPIRED`、`SOON` 这类状态，于是会把一份当下仍然可用的 key 判死，`keybox_fetch.sh` 随之
+  拒装。现在非 `REVOKED` 一律跳过；只有在册却读不出 `status` 字段的才按吊销处理（保守）。
+
+### 变更
+
+- `module/keybox_check.sh`、`module/keybox_revoke_check.sh` 首次纳入版本控制并随模块出货。
+- `module/collect_logs.sh` 新增两段诊断：
+  - keybox 回退：抓 keymint 日志里的 `invalid keybox` / `rewriting bundled template` /
+    `fallback=true` / `missing RSA key entry`，并把运行时目录与配置目录两份 keybox 的
+    sha256 对比 —— 两者不一致说明 keymint 读的不是用户以为装上的那份。
+  - 吊销结论：`revoked-by-google: yes/no/unknown`，命中时逐条列出序列号与原因；列表取不到
+    时明确报 `unknown`，不当成「没吊销」。
+- `build.sh`：新增出货前的**装机覆盖断言**。把 `customize.sh` 的 `for f in ...` 清单
+  （其中 `$ENGINE_FILES` 按 customize.sh 的方式从 `engine.sh` 取出）、两处字面量
+  `install_file "..."` 调用一起还原成「安装器会要哪些文件」，然后双向核对：模块根目录每个
+  `.sh` 都必须被某个安装器要过，清单里点的名字也必须在暂存目录里真的存在，否则 `die` 并列出
+  具体文件。r8 那个「文件在包里、却没人解压」的 bug 属于静默失效，只能从设备日志反推，现在
+  打包阶段就拦下（用临时脚本验证过：命中即退出码 1，且不覆盖 `out/` 里已打的包）。
+- `build.sh`：Python 回退的解释器探测从「`command -v python3 || command -v python`」改为
+  逐个 `-V` 试跑。本机 PATH 上有个微软商店留下的 `python3` 空壳别名，只查存在性会挑中它，
+  于是整模块拼装一路正常、到最后一步打包才失败。
+- `module.prop`：`version=v1.0.4-omk-r9`、`versionCode=10409`。
+
+### 说明
+
+- 出货引擎仍是 OhMyKeymint `1.2.0-preview-a1f3241`（`libs/arm64-v8a/keymint`，sha256
+  `f02edf28…`）。`1.3.5` 只存在于参考目录，是第三方分支，不是本仓库的引擎。
+- 设备那份 keybox（13,579 B，sha256 `286c6680…39d3c`，与 r8 诊断日志记的摘要首尾一致）
+  **已被吊销**：两条链的叶证书 `1698420960673666191`（ECDSA）与 `15510740886364958753`
+  （RSA）都在册，`status=REVOKED / reason=KEY_COMPROMISE`，中间证书与根不在册 —— 公开镜像
+  的 key 泄漏之后就是这个吊销形态。用 09-30 12:05 缓存的列表和当天最新的列表各查一遍结论
+  相同（两份都是 1759 条），所以不是列表刚刚更新过。
+- 镜像站 `http://evoker.qzz.io/key` 当前那份是 base64（22,572 B，解码后 16,927 B，
+  `DeviceID="t.me/keyboxstrong @evokerr"`，ECDSA + RSA 各 3 张证书），**两道校验都通过**；
+  它与设备上那份（13,579 B）以及 r8 日志里的 18,108 B 都不同 —— 镜像已经换过 key。
+  `keybox_fetch.sh` 先解码再校验（第 156 行），校验落在解码后的文件上，所以 base64 这层不会
+  让新闸门误拦。刷 r9 后点 [Action] 就会把它换上。
+- 校验顺序仍有一处刻意的不对称：`keybox_fetch.sh` 把吊销检查放在变更检测之后（第 192 行），
+  为的是每小时例行同步不必每次都去拉 179 KB 的列表；列表取不到时 fail-open，只有确认在册
+  才拒装。
+
+## v1.0.4-omk-r8 — 2026-09-30
+
+修掉「一份畸形 keybox 被同步进 OMK 运行时目录，keymint 拒绝它并回退内置模板，Play
+Integrity 三项全红」这条路径 —— 它比「keybox 被吊销」的两绿一红更糟，而且完全是模块
+自己放进去的。
+
+### 修复
+
+- **畸形 keybox 不再被写进 OMK 运行时目录**：OhMyKeymint 解析 keybox 时若发现某个
+  `<Key>` 条目不完整（典型是**缺 RSA 条目**），会**拒收整份文件**，而且**不保留原来
+  那份可用的** —— 它改写成自己内置的模板（`DeviceID="sw"`，Google 无法验证的占位链），
+  三项判定因此全红。设备日志里就是这三行：
+  ```
+  [WARN] keymint::keybox - invalid keybox.xml at /data/misc/keystore/omk/keybox.xml:
+         missing RSA key entry in keybox.xml; rewriting bundled template
+  [DEBUG] keymint::keybox - keybox reload completed without identity change (fallback=true)
+  [WARN] keymint::keymaster::service - Skipping stale keybox-bound entry retirement
+         while keybox fallback is active.
+  ```
+  复现路径：用户把一份 4220 字节的 keybox（应用导入，属主 `u0_a225:media_rw`）放进
+  配置目录，而模块此前只按「文件里有没有 `Keybox` 这个字符串」放行，于是这份文件被
+  一路同步进 OMK 的运行时目录，keymint 重启后拒收它、回退模板。
+  - 新增 `module/keybox_check.sh`：按 keymint 实际挑剔的顺序做**结构化校验** ——
+    `<AndroidAttestation>` 根、`<Keybox>`、`<NumberOfKeyboxes> >= 1`、**至少一个
+    `<Key algorithm="rsa">`**、每个 `<Key>` 都要有带 PEM 的 `<PrivateKey>` 与非空的
+    `<CertificateChain>`；不合格时逐条打印原因，退出码 0/1/2（可用 / 不可用 / 读不到）。
+  - `omk-early.sh`：落盘前先校验。这是最要命的一处 —— 它跑在 keymint 启动之前，写进去
+    什么 keymint 第一次就解析什么。现在配置目录的 keybox 不可用就**不种**，改用模块自带
+    的那份；两份都不可用就不建这个文件，让 keymint 用它的模板、由 `omk-sync.sh` 稍后
+    换成好的（模板只是两绿一红，被拒收一份文件才是三红）。
+  - `omk-sync.sh`：新增 `kb_usable()`，不可用的 keybox 不复制到 OMK 运行时目录，保留
+    上一份可用的。
+  - `keybox_fetch.sh`：下载并解码后校验，不合格就**不落盘**，保住磁盘上那份。
+  - `action.sh`：三处 `grep -q "Keybox"` 全部换成结构化校验。副作用是**自愈** —— 磁盘上
+    那份不可用时不再被误判成「keybox ok」而跳过拉取，Action 会去拉镜像那份（同样经过
+    校验）覆盖掉坏文件。
+  - `webroot/index.html`：导入 keybox 时改用同一个校验器，并**在手机上直接显示第一条
+    原因**（原来只报一句 "Not a valid keybox"，看不出哪里不对）。
+
+### 变更
+
+- `collect_logs.sh`：
+  - Keybox 段的 `looks-like-keybox:` 换成 `usable-by-keymint: yes/NO`，为 NO 时逐条
+    打印原因并给出修法；
+  - OMK 段新增 `keybox fallback (keymint)`：命中 `invalid keybox` /
+    `rewriting bundled template` / `fallback=true` / `missing RSA key entry` 就点名
+    「keymint 已回退内置模板，三项必然全红」，并提示重跑 Action 重新拉取、仍红则清一次
+    Google Play 服务的数据；
+  - OMK 段新增运行时 keybox 与配置目录 keybox 的哈希比对，不一致时提示 keymint 读的
+    不是用户以为的那份。
+- `module.prop`：`version=v1.0.4-omk-r8`、`versionCode=10408`。
+- 清掉两处没有任何调用点的死代码：`engine.sh` 的 `engine_spoof_keystore_keys()`，以及
+  `service.sh` 里那个由 `teesim_gen_config` 改名而来、但没有任何随模块发布的引擎会定义
+  的 `attest_gen_config` 空钩子。
+- `build.sh`：本机既没有 `zip` 也没有 MSYS 可借，新增 Python 回退 `scripts/zipdir.py`，
+  写出与 `zip -qr9` 相同的归档形态与 Unix 模式；`zip` 存在时仍优先用它。
+
+### 说明
+
+- 校验器只管**结构**：不做签名验证、不比对叶证书与私钥、不查 Google 吊销列表 —— 一份
+  格式完好但已被吊销的 keybox 照样通过，代价是 STRONG（常规的两绿一红）。它拦的是更糟
+  的那一类：keymint 直接拒收、三项全红。
+- 本次排查的两份日志里只有一份命中这个缺陷；另一份（`store was dropped and rebuilt this
+  boot`）是 r6 那个 pin 换来的最后一次丢库，处置同 r7：清一次 Google Play 服务的数据让
+  GMS 重新申领证明密钥。
+- 顺带核对过镜像分发的 keybox（13579 字节，sha256 `286c6680…`）：结构完整（ECDSA + RSA
+  双条目，各 3 张证书），且~~其证书序列号**不在** Google 的吊销列表里~~ ——
+  **这半句经 r9 复核作废**：两条链的叶证书 `1698420960673666191`（ECDSA）与
+  `15510740886364958753`（RSA）都在册，`REVOKED / KEY_COMPROMISE`，这份 keybox 是**被吊销的**。
+  结构完整那半句仍然成立，那份日志的三项全红也确实有上面这条回退 —— 也就是说同一台设备同时
+  踩着「被 keymint 拒收」与「被 Google 吊销」两条，回退先修，吊销要靠换 key（见 r9）。
+- `module.prop` **有意不带 `updateJson=`**，这是决定，不是漏抄：上游那行指向
+  `evoker0/AlwaysStrong` 的 `update.json`，其 `zipUrl` 是上游 TEE-Simulator 整包。本仓库
+  `versionCode=10408` 高于上游的 104，Magisk 按数值比较不会提示；但管理器一旦按字符串
+  比较、或上游改用 PIF 那种六位 versionCode，就会弹出「有更新」并把人刷回非 OMK 版 ——
+  而上游的卸载路径会删 OMK 密钥库（r7 修掉的坑）。要 OTA 就另发一份本仓库自己的
+  `update.json` 并指向这里，而不是恢复这一行。
+
 ## v1.0.4-omk-r7 — 2026-09-29
 
 修掉「卸载重装本模块会永久毁掉 OMK 密钥库」这个真正的坑，并给 `config.toml` 的

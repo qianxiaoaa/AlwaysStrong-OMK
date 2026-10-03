@@ -32,6 +32,13 @@ MODPATH="${0%/*}"
 # MAX_USES_PER_BOOT is understood by every KeyMint version, where EARLY_BOOT_ONLY
 # needs 4.1+. Only set it when the ROM left it unset — a value fixed at build
 # time is the vendor's decision and must not be overridden.
+#
+# The literal is exactly "LEVEL:STRATEGY" and both halves must be spelled this
+# way. Verified against the bundled engine, OhMyKeymint 1.2.0-preview-a1f3241:
+# src/keymaster/boot_key.rs parses it with split_once(':') and matches
+# "TRUSTED_ENVIRONMENT"/"STRONGBOX" and "EARLY_BOOT_ONLY"/"MAX_USES_PER_BOOT".
+# A bare MAX_USES_PER_BOOT without the colon is rejected ("Missing colon") and
+# falls back to inference — the unstable path this line exists to avoid.
 if [ -z "$(getprop ro.keystore.boot_level_key.strategy 2>/dev/null)" ]; then
     resetprop ro.keystore.boot_level_key.strategy TRUSTED_ENVIRONMENT:MAX_USES_PER_BOOT 2>/dev/null || true
 fi

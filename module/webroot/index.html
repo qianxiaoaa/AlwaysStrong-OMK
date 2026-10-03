@@ -1217,9 +1217,18 @@ async function init(){
       await loadStatus();
       return;
     }
-    const chk=await ksuExec("head -c 4096 "+shq(path)+" 2>/dev/null | grep -qi -e Keybox -e AndroidAttestation && echo ok || echo bad");
-    if((chk.stdout||"").trim()!=="ok"){
-      if(fmMode!=="import") ckSize.textContent=(T.ck_bad||"Not a valid keybox");
+    // Structure, not the "Keybox" substring: keymint rejects a document whose
+    // key entry is incomplete and then rewrites its own bundled template, which
+    // turns every Play Integrity verdict red — worse than the keybox the user
+    // already had. Show the first reason so a bad import is diagnosable from the
+    // phone without pulling a log.
+    const KC=MOD+"/keybox_check.sh";
+    const chk=await ksuExec(`if [ -f ${shq(KC)} ]; then sh ${shq(KC)} ${shq(path)} 2>&1; else head -c 4096 ${shq(path)} 2>/dev/null | grep -qi -e Keybox -e AndroidAttestation || echo "not a keybox"; fi`);
+    const why=(chk.stdout||"").trim();
+    if(why){
+      const first=why.split("\n")[0];
+      toast((T.ck_bad||"Not a valid keybox")+" — "+first,7000);
+      if(fmMode!=="import") ckSize.textContent=(T.ck_bad||"Not a valid keybox")+" — "+first;
       fmClose(); return;
     }
     if(fmMode==="import"){

@@ -68,7 +68,30 @@ while [ $# -gt 0 ]; do
 done
 
 command -v unzip >/dev/null 2>&1 || die "unzip not found"
-command -v zip   >/dev/null 2>&1 || die "zip not found"
+
+# Info-ZIP's zip is preferred: it records the Unix modes the installer expects.
+# A stock Windows box has no zip and no MSYS to borrow one from, so fall back to
+# the Python packer in scripts/, which writes the same archive shape.
+# `command -v python3` alone is not enough here: the Microsoft Store leaves a
+# non-functional python3 alias on PATH, and picking it fails only after the whole
+# module is staged. Probe each candidate instead of trusting the first hit.
+if [ -z "${PYTHON:-}" ]; then
+    for _cand in python3 python py; do
+        _p="$(command -v "$_cand" 2>/dev/null)" || continue
+        if "$_p" -V >/dev/null 2>&1; then PYTHON="$_p"; break; fi
+    done
+fi
+if ! command -v zip >/dev/null 2>&1 && [ -z "$PYTHON" ]; then
+    die "neither zip nor a working python is available to package the module"
+fi
+
+pack() {  # pack <out.zip> <dir>
+    if command -v zip >/dev/null 2>&1; then
+        ( cd "$2" && zip -qr9 "$1" . )
+    else
+        "$PYTHON" "$ROOT/scripts/zipdir.py" "$1" "$2"
+    fi
+}
 
 fetch() {  # fetch <dest> <url>
     if command -v curl >/dev/null 2>&1; then
@@ -188,7 +211,54 @@ for f in $PIF_FILES; do
 done
 ok "staged PlayIntegrityFork payload"
 
-# ---------- 4) permissions + package ----------
+# ---------- 4) install coverage ----------
+# r8 packaged keybox_check.sh but customize.sh's extraction list never named it,
+# so the file did not exist on device and both keybox gates silently degraded to
+# their fallbacks there. A script that ships without an installer is that same bug
+# class, so fail the build here rather than reading it off a diagnostic log later.
+#
+# The installer asks for names in three places: the `for f in ...` loop (whose
+# $ENGINE_FILES half is defined by engine.sh, the same sourcing customize.sh does),
+# literal install_file calls in customize.sh, and the engine adapter's attest_install.
+# tr's octal form of backslash (\134) is deliberate: the loop continues lines with
+# it, and a written backslash in a regex is the fragile way to delete one.
+installed_names() {
+    sed -n '/^for f in/,/; *do/p' "$STAGE/customize.sh" \
+        | tr -d '\134\n"' | tr -s ' \t' '\n' \
+        | grep -vE '^$|^for$|^in$|^do$|^f$|^;$|[$;|&]'
+    sed -n 's/^ENGINE_FILES="\([^"]*\)".*/\1/p' "$STAGE/engine.sh" | tr ' \t' '\n\n'
+    grep -h '^[[:space:]]*install_file "' "$STAGE/customize.sh" "$STAGE/attest.sh" 2>/dev/null \
+        | sed 's/^[[:space:]]*install_file "//; s/".*//' \
+        | grep -v '[$]'
+}
+
+# Kept out of $STAGE so the check itself cannot end up inside the package.
+# Blank and path-shaped entries are dropped: only root-level names are comparable,
+# and the engine adapter installs its binaries by subdirectory.
+NAMES_LIST="$BUILD/installed-names.txt"
+installed_names | grep -vE '^$|.*/' | sort -u > "$NAMES_LIST"
+
+_orphans=""
+for f in "$STAGE"/*.sh; do
+    [ -f "$f" ] || continue
+    n="${f##*/}"
+    # The installer script itself is read by the manager, never extracted.
+    [ "$n" = "customize.sh" ] && continue
+    grep -qx "$n" "$NAMES_LIST" || _orphans="$_orphans
+  - $n"
+done
+[ -z "$_orphans" ] || die "staged scripts no installer extracts:$_orphans"
+
+_missing=""
+while IFS= read -r n; do
+    # -e, not -f: an installer may name a tree (webroot/) rather than a file.
+    [ -e "$STAGE/$n" ] || _missing="$_missing
+  - $n"
+done < "$NAMES_LIST"
+[ -z "$_missing" ] || die "installer names files that are not staged:$_missing"
+ok "every staged script has an installer ($(wc -l < "$NAMES_LIST" | tr -d ' ') names checked)"
+
+# ---------- 5) permissions + package ----------
 chmod 0755 "$STAGE"/*.sh 2>/dev/null || true
 chmod 0755 "$STAGE/omk-daemon" "$STAGE/omk-injector" 2>/dev/null || true
 chmod 0755 "$STAGE/libs/$OMK_ABI/keymint" "$STAGE/libs/$OMK_ABI/inject" 2>/dev/null || true
@@ -201,6 +271,6 @@ mkdir -p "$OUT"
 ZIP="$OUT/AlwaysStrong-${VERSION}.zip"
 rm -f "$ZIP"
 info "Packaging $ZIP"
-( cd "$STAGE" && zip -qr9 "$ZIP" . )
+pack "$ZIP" "$STAGE"
 
 ok "$(du -h "$ZIP" | cut -f1)  $ZIP"

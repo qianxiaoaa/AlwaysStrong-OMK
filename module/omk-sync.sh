@@ -64,20 +64,45 @@ own_omk() {
 # AlwaysStrong's keybox_fetch.sh / the WebUI write $CONFIG_DIR/keybox.xml. Copy
 # it across only when the content differs, so a working runtime keybox is never
 # rewritten (and never restarted) for nothing.
+#
+# The file also has to be one keymint will accept. This is the last gate before
+# the runtime keybox, and it is the one that matters: keymint does not keep the
+# previous keybox when it rejects a new one — it rewrites its bundled template
+# (DeviceID="sw", a placeholder chain Google cannot verify), and every Play
+# Integrity verdict goes red. Refusing to copy an unusable file leaves the last
+# good keybox in place, which is the difference between one red verdict and
+# three.
 SRC_KB="$CONFIG_DIR/keybox.xml"
-if [ -s "$SRC_KB" ] && head -c 4096 "$SRC_KB" 2>/dev/null | grep -q "Keybox"; then
-    _s=$(sha_of "$SRC_KB")
-    _d=$(sha_of "$OMK_KEYBOX")
-    if [ -n "$_s" ] && [ "$_s" != "$_d" ]; then
-        # Stage + own before the rename: mv within the dir keeps the inode, so the
-        # keystore uid can read the new file the instant it appears. Copying
-        # straight over the live path would leave a root-owned window where
-        # keymint's watcher reads EACCES and rejects the change.
-        _kbtmp="$OMK_KEYBOX.as.tmp"
-        if cp -f "$SRC_KB" "$_kbtmp" 2>/dev/null; then
-            own_omk "$_kbtmp"; mv -f "$_kbtmp" "$OMK_KEYBOX"
-            CHANGED=1
-            NEED_KM=1
+KB_CHECK="$MODDIR/keybox_check.sh"
+
+kb_usable() {
+    [ -s "$1" ] || return 1
+    if [ -f "$KB_CHECK" ]; then
+        _r=$(sh "$KB_CHECK" "$1" 2>&1)
+        [ -z "$_r" ] && return 0
+        printf '%s\n' "$_r" | sed 's/^/keybox_check: /' >&2
+        return 1
+    fi
+    head -c 4096 "$1" 2>/dev/null | grep -q "Keybox"
+}
+
+if [ -s "$SRC_KB" ]; then
+    if ! kb_usable "$SRC_KB"; then
+        echo "omk-sync: keybox at $SRC_KB is unusable — leaving OMK's runtime keybox untouched" >&2
+    else
+        _s=$(sha_of "$SRC_KB")
+        _d=$(sha_of "$OMK_KEYBOX")
+        if [ -n "$_s" ] && [ "$_s" != "$_d" ]; then
+            # Stage + own before the rename: mv within the dir keeps the inode, so the
+            # keystore uid can read the new file the instant it appears. Copying
+            # straight over the live path would leave a root-owned window where
+            # keymint's watcher reads EACCES and rejects the change.
+            _kbtmp="$OMK_KEYBOX.as.tmp"
+            if cp -f "$SRC_KB" "$_kbtmp" 2>/dev/null; then
+                own_omk "$_kbtmp"; mv -f "$_kbtmp" "$OMK_KEYBOX"
+                CHANGED=1
+                NEED_KM=1
+            fi
         fi
     fi
 fi
@@ -160,21 +185,50 @@ fi
 # reports an unlocked bootloader and the verdict stays red no matter how good
 # the keybox is.
 #
-# The four patch-level fields stay on "auto" on purpose. AlwaysStrong's
-# sync_patch.sh already pins ro.build.version.security_patch /
-# ro.vendor.build.security_patch to the attested date, and OMK's "auto" reads
-# exactly those props. Writing an explicit date here would make OMK overwrite
-# the property itself, which fights sync_patch.sh's "never move a device's patch
-# backwards" rule on an OTA-fresh device.
+# The four patch-level fields stay on "auto" on purpose. Three of them
+# (security_patch / os_patchlevel / vendor_patchlevel) resolve from the runtime
+# build props that sync_patch.sh pins to the attested date. boot_patchlevel does
+# NOT: OMK reads com.android.build.boot.security_patch out of the active top-level
+# vbmeta image first, so it reports the ROM's own boot date whatever the props
+# say. Writing an explicit date here would make OMK overwrite the property itself,
+# which fights sync_patch.sh's "never move a device's patch backwards" rule on an
+# OTA-fresh device.
+#
+# vb_hash / vb_key stay on the engine's own derivation unless the user drops a
+# pinned value in the config dir. OMK's "auto" reads the device's verified boot
+# state, which on a custom ROM whose vbmeta carries no authentication block still
+# produces a correctly-computed digest — one that simply matches no certified
+# build. The documented escape is to pin the two 64-hex digests taken from an
+# unmodified stock image of the same build. Absent or malformed files leave both
+# keys exactly as they are: "auto" remains the default and the safer answer.
 #
 # [crypto] and [device] are never rewritten: the crypto seeds are generated once
 # by keymint and protect every key it has created.
+_vb_ok() {  # <value> -> 0 when it is exactly 64 hex characters
+    [ "${#1}" -eq 64 ] || return 1
+    case "$1" in *[!0-9a-fA-F]*) return 1 ;; esac
+    return 0
+}
+_vbh=""
+_vbk=""
+[ -s "$CONFIG_DIR/vb_hash" ] && _vbh=$(tr -d ' \t\r\n' < "$CONFIG_DIR/vb_hash" | head -c 64)
+[ -s "$CONFIG_DIR/vb_key" ]  && _vbk=$(tr -d ' \t\r\n' < "$CONFIG_DIR/vb_key"  | head -c 64)
+if [ -f "$CONFIG_DIR/vb_hash" ] && ! _vb_ok "$_vbh"; then
+    echo "omk-sync: $CONFIG_DIR/vb_hash is not 64 hex characters — leaving vb_hash on auto" >&2
+    _vbh=""
+fi
+if [ -f "$CONFIG_DIR/vb_key" ] && ! _vb_ok "$_vbk"; then
+    echo "omk-sync: $CONFIG_DIR/vb_key is not 64 hex characters — leaving vb_key on auto" >&2
+    _vbk=""
+fi
+
 if [ -s "$OMK_CONFIG" ]; then
     _tmp="$OMK_CONFIG.as.tmp"
     awk \
         -v dl="true" -v vbs="true" \
         -v osv='"auto"' -v sp='"auto"' \
-        -v opl='"auto"' -v vpl='"auto"' -v bpl='"auto"' '
+        -v opl='"auto"' -v vpl='"auto"' -v bpl='"auto"' \
+        -v vbh="$_vbh" -v vbk="$_vbk" '
         BEGIN {
             want["device_locked"]     = dl
             want["verified_boot_state"] = vbs
@@ -184,6 +238,8 @@ if [ -s "$OMK_CONFIG" ]; then
             want["vendor_patchlevel"] = vpl
             want["boot_patchlevel"]   = bpl
             n = split("device_locked verified_boot_state os_version security_patch os_patchlevel vendor_patchlevel boot_patchlevel", order, " ")
+            if (vbh != "") { want["vb_hash"] = "\"" vbh "\""; order[++n] = "vb_hash" }
+            if (vbk != "") { want["vb_key"]  = "\"" vbk "\""; order[++n] = "vb_key"  }
         }
         function flush_missing(   i, k) {
             for (i = 1; i <= n; i++) {

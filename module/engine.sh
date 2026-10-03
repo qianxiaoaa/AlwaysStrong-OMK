@@ -56,11 +56,6 @@ engine_spoof_defaults() {
     echo "spoofProvider=0 spoofVendingFinger=$_svf spoofBuild=1 spoofProps=1 spoofSignature=0 spoofVendingSdk=0"
 }
 
-# The three keystore-owned flags (see the note above).
-engine_spoof_keystore_keys() {
-    echo "spoofProvider spoofSignature spoofVendingSdk"
-}
-
 # One-shot: drop an inherited override for the three keystore flags from
 # spoof.conf, so upgrading from a pre-OMK install can't carry a config that
 # turns all three Play Integrity verdicts red. The marker lives in CONFIG_DIR

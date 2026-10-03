@@ -413,9 +413,5 @@ fi
         if [ -x "$MODDIR/status_fetch.sh" ]; then
             sh "$MODDIR/status_fetch.sh" 2>&1 | log -t "AlwaysStrong-hourly"
         fi
-        # Engine hook for anything that has to be regenerated from target.txt
-        # (e.g. an engine that caches its own target list). attest_sync above
-        # already covers OMK; this stays for engines that need more.
-        command -v attest_gen_config >/dev/null 2>&1 && attest_gen_config
     done
 }&

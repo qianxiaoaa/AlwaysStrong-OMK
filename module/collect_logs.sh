@@ -19,6 +19,7 @@ MODDIR=$(cd "${0%/*}" 2>/dev/null && pwd)
 [ -f "$MODDIR/module.prop" ] || MODDIR=/data/adb/modules/tricky_store
 CFG=/data/adb/tricky_store
 KEY_HOST="${KEYBOX_BASE_URL:-http://evoker.qzz.io}"
+STATUS_URL="${KEYBOX_STATUS_URL:-https://android.googleapis.com/attestation/status}"
 
 # The engine identifier is a plain assignment in attest.sh. This script is run by
 # hand or by the WebUI and is never sourced by the module, so nothing ever puts
@@ -55,6 +56,14 @@ echo "generated: $(date 2>/dev/null)"
 
 sec "Module"
 grep -E '^(name|version|versionCode)=' "$MODDIR/module.prop" 2>/dev/null
+# Two different builds can carry the same version= string (nothing stops a rebuild
+# under the same number, and a flashed zip is not proof of what is installed after a
+# partial install), so hash the shipped scripts too. sha256sum's output includes the
+# filenames, so this moves when a file is renamed, added, removed or edited — which
+# is the question "which bytes are actually on this device" that version= cannot
+# answer.
+_fp=$(sha256sum "$MODDIR"/*.sh 2>/dev/null | sha256sum 2>/dev/null | cut -c1-8)
+echo "scripts fingerprint: ${_fp:-?} ($(ls "$MODDIR"/*.sh 2>/dev/null | wc -l) files)"
 [ -f "$MODDIR/engine.sh" ] && grep -E '^ENGINE(_NAME)?=' "$MODDIR/engine.sh"
 [ -f "$MODDIR/attest.sh" ] && grep -E '^ATTEST(_NAME)?=' "$MODDIR/attest.sh"
 
@@ -129,6 +138,22 @@ if [ -f "$OMK_RUN/logs/keymint.log.store-reset" ]; then
         echo "dropped store kept at $OMK_STATE/store-dropped ($(du -sk "$OMK_STATE/store-dropped" 2>/dev/null | awk '{print $1"K"}'))"
     fi
 fi
+# Which KeyMint instance seals the boot-level key is re-decided at every keymint
+# start unless ro.keystore.boot_level_key.strategy pins it, and a start that picks
+# a different instance than the one that sealed the stored blob cannot decrypt it
+# — which is what drops the store. The strategy is only pinned from post-fs-data.sh
+# onwards, so a keymint start earlier than that runs on inference, and the two
+# decisions can differ within one boot. Print both: a line that changes between the
+# pre-reset log and the live one names the cause without anyone guessing at it.
+echo "--- level-zero key selection"
+echo "  prop strategy=$(getprop ro.keystore.boot_level_key.strategy 2>/dev/null) boot_level=$(getprop keystore.boot_level 2>/dev/null)"
+for _lvl_log in "$OMK_RUN/logs/keymint.log.store-reset" "$OMK_RUN/logs/keymint.log"; do
+    [ -s "$_lvl_log" ] || continue
+    echo "  ${_lvl_log##*/}:"
+    _sel=$(grep -E 'boot_level_key\.strategy|get_level_zero_key|boot-level key cache' \
+           "$_lvl_log" 2>/dev/null | tail -n 8)
+    if [ -n "$_sel" ]; then printf '%s\n' "$_sel" | sed 's/^/    /'; else echo "    none"; fi
+done
 # keymint's DT_NEEDED carries no libc++, so libc++_shared.so reaches it as a
 # dependency of liblog.so and LD_LIBRARY_PATH decides which copy wins. Listing
 # the candidates separates "the loader picked the wrong libc++" from "the binary
@@ -154,6 +179,41 @@ if [ -s "$OMK_RUN/config.toml" ]; then
     awk '/^[[:space:]]*\[/ { intrust = ($0 ~ /\[trust\]/) } intrust' "$OMK_RUN/config.toml" 2>/dev/null
 else
     echo "no config.toml yet (keymint has not started)"
+fi
+# --- verified boot inputs -------------------------------------------------
+# vb_hash / vb_key stay on "auto", which means keymint reads these two props and
+# copies whatever it finds into the attested root of trust — so the values Google
+# judges DEVICE on are these, not anything in the keybox. service.sh invents a
+# digest when the kernel left the prop empty (sha256 over the raw first 64 KiB of
+# the vbmeta partition, which is not what AVB measures), and that is otherwise
+# undetectable from a log: it is 64 hex chars like the real thing. Reproducing the
+# formula here turns "is our root of trust a made-up number?" into a yes/no line.
+# The four values used to live in three different files, which cost a full
+# debugging session to line up by hand.
+echo "--- verified boot inputs"
+_vbd=$(getprop ro.boot.vbmeta.digest 2>/dev/null)
+_vbk=$(getprop ro.boot.vbmeta.public_key_digest 2>/dev/null)
+echo "ro.boot.vbmeta.digest: ${_vbd:-<empty>}"
+echo "ro.boot.vbmeta.public_key_digest: ${_vbk:-<empty>}"
+echo "ro.boot.verifiedbootstate: $(getprop ro.boot.verifiedbootstate 2>/dev/null)"
+echo "ro.boot.vbmeta.device_state: $(getprop ro.boot.vbmeta.device_state 2>/dev/null)"
+[ -z "$_vbd" ] && echo "WARN: no vbmeta digest — the attested root of trust is empty"
+_vbblk=""
+if [ -n "$_vbd" ]; then
+    for _vb in /dev/block/by-name/vbmeta /dev/block/by-name/vbmeta_a \
+               /dev/block/bootdevice/by-name/vbmeta; do
+        [ -r "$_vb" ] && _vbblk="$_vb" && break
+    done
+fi
+if [ -n "$_vbblk" ]; then
+    # 64 KiB only. service.sh's own comment warns that reading the whole partition
+    # during early boot can hang the boot animation on some Xiaomi devices.
+    _vbc=$(dd if="$_vbblk" bs=4096 count=16 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
+    if [ -n "$_vbc" ] && [ "$_vbc" = "$_vbd" ]; then
+        echo "WARN: the digest equals sha256(first 64 KiB of $_vbblk) — it is service.sh's invented value, not an AVB digest, so no build Google knows can match it"
+    elif [ -n "$_vbc" ]; then
+        echo "digest is not the 64 KiB sha256 of $_vbblk"
+    fi
 fi
 # The [crypto] seeds are what make the store decryptable, and OMK mints fresh
 # ones when config.toml is missing at keymint start. Print which fields exist and
@@ -216,6 +276,26 @@ echo "--- keymint startup failures (last 3)"
 _fatal=$(grep -E 'fatal startup error|failed to initialize boot-level key cache|failed to decrypt keyblob' \
          "$OMK_RUN/logs/keymint.log" 2>/dev/null | tail -n 3)
 echo "${_fatal:-none}"
+# A rejected keybox is a different failure from a dead store, and it is the one
+# that produces three red verdicts: keymint does not keep the previous file, it
+# rewrites its bundled template (DeviceID="sw"). Name it, and also compare the
+# runtime copy against the configured one — when they differ, the file keymint is
+# actually reading is not the file the user thinks they installed.
+echo "--- keybox fallback (keymint)"
+_kbfb=$(grep -E 'invalid keybox|rewriting bundled template|fallback=true|missing RSA key entry' \
+        "$OMK_RUN/logs/keymint.log" 2>/dev/null | tail -n 3)
+if [ -n "$_kbfb" ]; then
+    echo "$_kbfb"
+    echo "WARN: keymint rejected a keybox and fell back to its bundled template — every Play Integrity verdict is red until a usable keybox is restored. Re-run the Action to re-fetch one; if the verdicts stay red after that, clear Google Play services' data so GMS re-applies for attestation keys (its cached ones were bound to the rejected keybox)."
+else
+    echo "none"
+fi
+if [ -s "$OMK_RUN/keybox.xml" ] && [ -s "$CFG/keybox.xml" ]; then
+    _rs=$(sha < "$OMK_RUN/keybox.xml" 2>/dev/null | awk '{print $1}')
+    _cs=$(sha < "$CFG/keybox.xml" 2>/dev/null | awk '{print $1}')
+    [ -n "$_rs" ] && [ -n "$_cs" ] && [ "$_rs" != "$_cs" ] && \
+        echo "WARN: runtime keybox ($(printf '%s' "$_rs" | cut -c1-12)) != configured keybox ($(printf '%s' "$_cs" | cut -c1-12)) — keymint is reading a different file than the config dir holds"
+fi
 echo "--- injector.log (last 25)"
 tail -25 "$OMK_RUN/logs/injector.log" 2>/dev/null || echo "none"
 
@@ -274,11 +354,62 @@ echo "ro.vendor.build.security_patch: $(getprop ro.vendor.build.security_patch 2
 
 sec "Keybox (metadata only — contents withheld)"
 KB="$CFG/keybox.xml"
+KB_CHECK="$MODDIR/keybox_check.sh"
 if [ -s "$KB" ]; then
     echo "path: $KB"
     echo "size: $(wc -c < "$KB") bytes"
     echo "sha256: $(sha < "$KB" | awk '{print $1}')"
-    echo "looks-like-keybox: $(head -c 4096 "$KB" | grep -q Keybox && echo yes || echo NO)"
+    # The structural verdict, not "contains the string Keybox". keymint rejects a
+    # document whose key entry is incomplete, and when it rejects one it rewrites
+    # its own bundled template rather than keeping the file that was there — the
+    # difference between one red verdict and three, so it is worth naming.
+    if [ -f "$KB_CHECK" ]; then
+        _why=$(sh "$KB_CHECK" "$KB" 2>&1)
+        if [ -z "$_why" ]; then
+            echo "usable-by-keymint: yes"
+        else
+            echo "usable-by-keymint: NO"
+            printf '%s\n' "$_why" | sed 's/^/  reason: /'
+            echo "WARN: keymint will reject this keybox and rewrite its bundled template (DeviceID=\"sw\") — all three Play Integrity verdicts go red. Fix: turn custom keybox off and re-run the Action to re-fetch, or import a keybox that passes this check."
+        fi
+    else
+        echo "usable-by-keymint: unknown (keybox_check.sh not installed)"
+    fi
+    # Google's half of the question, which nothing local can answer: a keybox can
+    # be structurally perfect, load in keymint without complaint, and still fail
+    # every verdict because its serial is on attestation/status. Public mirrors
+    # are the usual source of such a key — one key shared by everyone is revoked
+    # the moment it leaks, and the mirror keeps serving it. So read the list
+    # Google reads rather than guessing from the file.
+    KB_REVOKE="$MODDIR/keybox_revoke_check.sh"
+    if [ -f "$KB_REVOKE" ]; then
+        _RT="$CFG/.revcheck.$$"; mkdir -p "$_RT"
+        _got=0
+        if [ -n "$ABI" ] && [ -x "$ASFETCH" ] \
+           && "$ASFETCH" -T 8 -o "$_RT/status.json" "$STATUS_URL" >/dev/null 2>&1 \
+           && [ -s "$_RT/status.json" ]; then _got=1; fi
+        if [ "$_got" = 0 ] && [ -n "$BB" ] \
+           && "$BB" wget -q -T 10 -O "$_RT/status.json" "$STATUS_URL" >/dev/null 2>&1 \
+           && [ -s "$_RT/status.json" ]; then _got=1; fi
+        if [ "$_got" = 0 ] && command -v curl >/dev/null 2>&1 \
+           && curl -fsSL --connect-timeout 8 --max-time 20 -o "$_RT/status.json" "$STATUS_URL" >/dev/null 2>&1 \
+           && [ -s "$_RT/status.json" ]; then _got=1; fi
+        if [ "$_got" = 1 ]; then
+            _rev=$(sh "$KB_REVOKE" "$KB" "$_RT/status.json" 2>&1); _rrc=$?
+            case "$_rrc" in
+                0) echo "revoked-by-google: no" ;;
+                1) echo "revoked-by-google: YES"
+                   printf '%s\n' "$_rev" | sed 's/^/  /'
+                   echo "WARN: Google revoked this keybox — every Play Integrity verdict stays red however good the rest of the device looks. Tap [Action] to re-fetch from the mirror, or import a keybox that passes this check." ;;
+                *) echo "revoked-by-google: unknown (checker: $(printf '%s' "$_rev" | head -n 1))" ;;
+            esac
+        else
+            echo "revoked-by-google: unknown (could not fetch $STATUS_URL)"
+        fi
+        rm -rf "$_RT"
+    else
+        echo "revoked-by-google: unknown (keybox_revoke_check.sh not installed)"
+    fi
     echo "custom-keybox mode: $([ -f "$CFG/custom_keybox" ] && echo on || echo off)"
 else
     echo "no keybox.xml present"
