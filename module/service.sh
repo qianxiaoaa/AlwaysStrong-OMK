@@ -230,25 +230,10 @@ fi
     fi
 } &
 
-# --- VBMeta digest (deferred, bounded) ---
-# Reading the whole vbmeta partition during early boot can hang the boot
-# animation on some Xiaomi devices. Skip if already set, only read 64KiB.
-{
-sleep 60
-CURRENT_DIGEST=$(resetprop ro.boot.vbmeta.digest)
-if [ -z "$CURRENT_DIGEST" ] || echo "$CURRENT_DIGEST" | grep -qE '^0+$'; then
-    for p in /dev/block/by-name/vbmeta /dev/block/by-name/vbmeta_a /dev/block/bootdevice/by-name/vbmeta; do
-        [ -e "$p" ] && VBMETA_BLK="$p" && break
-    done
-    if [ -n "$VBMETA_BLK" ]; then
-        DIGEST=$(dd if="$VBMETA_BLK" bs=4096 count=16 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
-        if [ -n "$DIGEST" ]; then
-            resetprop -n ro.boot.vbmeta.digest "$DIGEST"
-            log -t "AlwaysStrong" "VBMeta digest set: ${DIGEST:0:16}..."
-        fi
-    fi
-fi
-}&
+# ro.boot.vbmeta.digest is deliberately left as the kernel set it. An AVB digest
+# is hashed over the vbmeta struct, so hashing the partition instead yields a
+# plausible-looking value that matches no certified build -- worse than an empty
+# prop, because it hides the real problem. Pin a stock digest in [trust] instead.
 
 # --- Housekeeping in background ---
 {

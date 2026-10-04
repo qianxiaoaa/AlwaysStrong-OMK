@@ -183,11 +183,12 @@ fi
 # --- verified boot inputs -------------------------------------------------
 # vb_hash / vb_key stay on "auto", which means keymint reads these two props and
 # copies whatever it finds into the attested root of trust — so the values Google
-# judges DEVICE on are these, not anything in the keybox. service.sh invents a
-# digest when the kernel left the prop empty (sha256 over the raw first 64 KiB of
-# the vbmeta partition, which is not what AVB measures), and that is otherwise
-# undetectable from a log: it is 64 hex chars like the real thing. Reproducing the
-# formula here turns "is our root of trust a made-up number?" into a yes/no line.
+# judges DEVICE on are these, not anything in the keybox. Module versions before
+# r10 filled an empty prop with sha256 over the raw first 64 KiB of the vbmeta
+# partition, which is not what AVB measures, and nothing in a log distinguishes
+# that from the real thing: it is 64 hex chars either way. Reproducing the old
+# formula here flags it if an earlier install leaves one behind, and keeps the
+# fabrication from quietly coming back.
 # The four values used to live in three different files, which cost a full
 # debugging session to line up by hand.
 echo "--- verified boot inputs"
@@ -206,11 +207,11 @@ if [ -n "$_vbd" ]; then
     done
 fi
 if [ -n "$_vbblk" ]; then
-    # 64 KiB only. service.sh's own comment warns that reading the whole partition
-    # during early boot can hang the boot animation on some Xiaomi devices.
+    # 64 KiB only: reading the whole partition during boot can hang the boot
+    # animation on some Xiaomi devices, and the AVB struct fits well inside it.
     _vbc=$(dd if="$_vbblk" bs=4096 count=16 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
     if [ -n "$_vbc" ] && [ "$_vbc" = "$_vbd" ]; then
-        echo "WARN: the digest equals sha256(first 64 KiB of $_vbblk) — it is service.sh's invented value, not an AVB digest, so no build Google knows can match it"
+        echo "WARN: the digest equals sha256(first 64 KiB of $_vbblk) — that is the pre-r10 service.sh formula, not an AVB digest, so no build Google knows can match it"
     elif [ -n "$_vbc" ]; then
         echo "digest is not the 64 KiB sha256 of $_vbblk"
     fi

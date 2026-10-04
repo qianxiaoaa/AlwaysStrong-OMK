@@ -12,7 +12,8 @@
 
 r9 刷入后设备侧验证通过：两道 keybox 闸门真的生效了（`usable-by-keymint: yes` /
 `revoked-by-google: no`），keybox 已换成未吊销那份 —— 但 DEVICE 与 STRONG 仍然红。关键路径因此从
-"身份材料"转向"被证明的引导完整性"。本版本目前只含**诊断**，行为改动待取证确认后并入。
+"身份材料"转向"被证明的引导完整性"。本版本含两项行为改动（`[trust]` 的 `vb_hash` / `vb_key` 钉值通道、
+删除 `service.sh` 伪造 digest）与三项诊断，**均未在真机上验证过**。
 
 ### 新增
 
@@ -34,12 +35,15 @@ r9 刷入后设备侧验证通过：两道 keybox 闸门真的生效了（`usabl
 
 ### 说明
 
-- **`service.sh:244` 的 digest 算法是错的**：AVB 的 vbmeta digest 是对 vbmeta **结构体**
-  （header + descriptors + auxiliary，长度通常只有几 KB）算的，不是对分区前 64 KiB 原始字节算的。
-  输出同样是 64 位十六进制，所以看不出问题。引擎的 `vb_hash = "auto"` 读的正是这个属性（二进制里
-  能看到它读 `ro.boot.vbmeta.digest` 与 `ro.boot.vbmeta.public_key_digest`）。**但本次它没有参与**：
-  设备上的 `5e44f8ea…` 实测等于 `sha256(该 ROM 的 vbmeta.img 前 6656 字节)`，是内核报的真摘要。
-  这段兜底仍应删（公式无效且会掩盖真值缺失），只是不是病因。
+- **`service.sh` 里伪造 digest 的那段已删除（2026-10-04）**。原公式是错的：AVB 的 vbmeta digest
+  是对 vbmeta **结构体**（header + descriptors + auxiliary，长度通常只有几 KB）算的，不是对分区前
+  64 KiB 原始字节算的，而输出同样是 64 位十六进制，所以从日志上看不出问题。引擎的
+  `vb_hash = "auto"` 读的正是这个属性（二进制里能看到它读 `ro.boot.vbmeta.digest` 与
+  `ro.boot.vbmeta.public_key_digest`），于是这段兜底会把"真值缺失"伪装成"有一个看着合理的根信任"。
+  注意它**不是本次的病因**：设备上的 `5e44f8ea…` 实测等于 `sha256(该 ROM 的 vbmeta.img 前 6656 字节)`，
+  是内核报的真摘要，这段兜底当时并未触发。删掉后属性保持内核给的值，缺值由 `collect_logs.sh` 的
+  `WARN: no vbmeta digest` 直接暴露；`collect_logs.sh` 仍复算那个旧公式作对照，万一更早安装的版本
+  留下过伪造值、或有人把它加回来，那行 WARN 会认出来。
 - `ro.boot.vbmeta.public_key_digest` 引擎会读，但模块从不设置；`omk-sync.sh` 的 `[trust]` 写入器只
   覆盖 7 个键，`vb_hash`/`vb_key` 不在其中 —— 也就是说这两个键从来没被本模块管过。现已补上钉值支持。
 - **病因（当前唯一被证实的解释）**：测试机刷的是自定义 ROM，其 `vbmeta.img` **没有认证块**（描述符
