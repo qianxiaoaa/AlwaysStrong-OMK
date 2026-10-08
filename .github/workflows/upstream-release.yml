@@ -1,0 +1,72 @@
+name: Upstream release
+
+# Daily at 02:00 Beijing time (UTC+8) == 18:00 UTC. Also runnable by hand from
+# the Actions tab. The job checks the OhMyKeymint engine and PlayIntegrityFork
+# pins against their newest upstream releases; when either moved it re-pins,
+# bumps the module's -omk-rN, rebuilds the flashable zip, commits, and cuts a
+# GitHub release in this repository.
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+# Push the bumped pins and create the release.
+permissions:
+  contents: write
+
+# Never let two runs overlap and fight over the working tree / tag.
+concurrency:
+  group: upstream-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check upstream payloads
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          bash scripts/check-payload-upstream.sh --apply
+          rc=$?
+          set -e
+          case "$rc" in
+            0)  echo "changed=false" >> "$GITHUB_OUTPUT" ;;
+            11) echo "changed=true"  >> "$GITHUB_OUTPUT" ;;
+            *)  echo "::error::payload check failed (rc=$rc)"; exit "$rc" ;;
+          esac
+
+      - name: Bump version
+        if: steps.check.outputs.changed == 'true'
+        id: bump
+        run: bash scripts/bump-r.sh
+
+      - name: Build module
+        if: steps.check.outputs.changed == 'true'
+        run: bash build.sh
+
+      - name: Commit bumped pins
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build.sh module/module.prop CHANGELOG.md
+          git commit -m "chore(release): ${{ steps.bump.outputs.version }}"
+          git push
+
+      - name: Publish release
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.bump.outputs.version }}" \
+            "out/AlwaysStrong-${{ steps.bump.outputs.version }}.zip" \
+            --title "${{ steps.bump.outputs.version }}" \
+            --generate-notes

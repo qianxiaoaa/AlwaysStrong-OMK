@@ -1,6 +1,19 @@
 # Changelog
 
-本仓库为第三方二改版本，版本号沿用上游 AlwaysStrong 的 `v1.0.4` 并加 `-omk` 后缀。
+本仓库是在 [AlwaysStrong-OMK](https://github.com/UtMostUR/AlwaysStrong-OMK)（二改）基础上的**三改**版本，三改作者为 **浅笑呐**（Telegram：https://t.me/AlwaysStrongR ）。版本号沿用上游 AlwaysStrong 的 `v1.0.x` 并加 `-omk-rN` 后缀。
+
+## v1.0.5-omk-r1 — 2026-10-08
+
+**三改首版。** 本仓库自此由 **浅笑呐** 以「三改」身份继续维护，Telegram 交流与公告统一走
+https://t.me/AlwaysStrongR 。引擎与外部来源承接 r11，本版只做身份与自动化调整：
+
+- `module.prop`：版本改为 `v1.0.5-omk-r1`（`versionCode=10501`）；作者名单加入三改作者 **浅笑呐**；
+  `support` 指向 https://t.me/AlwaysStrongR 。
+- 全仓库的 `https://t.me/` 链接统一替换为 https://t.me/AlwaysStrongR 。
+- 新增 `.github/workflows/upstream-release.yml` + `scripts/check-payload-upstream.sh` +
+  `scripts/bump-r.sh`：北京时间每天 02:00（UTC 18:00）自动检查上游 **OhMyKeymint** 与
+  **PlayIntegrityFork** 的 release；有新版本时更新 `build.sh` 钉值、递增 `-omk-rN`、
+  重新构建并在本仓库自动创建 Release。
 
 > **历史停维说明（2026-09-30）：公开镜像的 keybox 大规模被吊销，本仓库一度暂停维护。**
 > 自 r11 起恢复维护：条件材料改由新的上游来源提供，不再依赖那个已被吊销的镜像。

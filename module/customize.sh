@@ -26,7 +26,7 @@ NAME=$(grep_prop name "${TMPDIR}/module.prop")
 install_file() { unzip -qqjo "$ZIPFILE" "$1" -d "$2" || abort "extract failed: $1"; }
 
 ui_print "${NAME:-AlwaysStrong} $VERSION"
-ui_print "by @evokerr  -  t.me/keyboxstrong"
+ui_print "三改 by 浅笑呐  -  t.me/AlwaysStrongR"
 ui_print ""
 
 # stop anything that might be holding our binaries (upgrade-in-place). The list
