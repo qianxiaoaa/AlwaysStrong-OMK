@@ -809,7 +809,6 @@ const CK_FLAG=CFG+"/custom_keybox";
 const KEYBOX=CFG+"/keybox.xml";
 const INT_FILE=CFG+"/hourly_interval_sec";
 const MOD="/data/adb/modules/tricky_store";
-const KEY_HOST="http://evoker.qzz.io";
 
 // Collect logs -> /sdcard/AlwaysStrong-log-<timestamp>.txt for a GitHub issue.
 // The button label stays put; the result shows in a toast so a long path never
@@ -849,14 +848,14 @@ if(logBtn){
   });
 }
 
-// Current repo keybox name (evokerrkeyNN) from /meta.json — display only; the
-// keybox itself is still fetched from /key. Fetched once, used by the status
-// pill and the custom-keybox row.
+// Label for the keybox actually installed, read from the file itself — no
+// network. The mirror used to supply a filename here (evokerrkeyNN); the keybox
+// now comes from ZeyolZZZ's TEESimulator-RS-fix repo, so the file's own DeviceID
+// is the honest label. Used by the pill next to the health prefix.
 let metaKeyName="";
-async function fetchMetaName(){
-  const r=await ksuExec(`A=$(ls ${MOD}/bin/*/asfetch 2>/dev/null | head -1); [ -n "$A" ] && "$A" -T 8 ${KEY_HOST}/meta.json 2>/dev/null | grep -o '"filename"[^,]*' | head -1`);
-  const m=(r.stdout||"").match(/"([^"]+)\.xml"/);
-  metaKeyName = m ? m[1] : "";
+async function fetchKeyboxName(){
+  const r=await ksuExec(`grep -o 'DeviceID="[^"]*"' ${KEYBOX} 2>/dev/null | head -1 | sed -e 's/DeviceID="//' -e 's/"$//'`);
+  metaKeyName=(r.stdout||"").trim();
 }
 
 // flag absent = feature enabled
@@ -906,7 +905,7 @@ async function init(){
     document.getElementById("variant").textContent=parts.join(" · ");
   }catch(e){}
 
-  await fetchMetaName();
+  await fetchKeyboxName();
   await loadStatus();
 
   const fp=document.getElementById("fp");
@@ -1103,8 +1102,8 @@ async function init(){
     const t=(r.stdout||"").trim().split("|");
     const bytes=parseInt(t[0],10)||0, mtime=parseInt(t[1],10)||0;
     if(bytes>0){
-      // custom file name if the user picked one, else the auto keybox name
-      // (evokerrkeyNN) — not the generic "keybox.xml".
+      // custom file name if the user picked one, else the installed keybox's
+      // own DeviceID — not the generic "keybox.xml".
       let nm=((await ksuExec(`cat "${KBNAME}" 2>/dev/null`)).stdout||"").trim();
       if(!nm) nm=metaKeyName||"keybox.xml";
       ckName.textContent=(T.ck_sel||"Selected keybox:")+" "+nm;

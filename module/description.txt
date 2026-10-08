@@ -1,1 +1,1 @@
-Strong Play Integrity in one drop-in module. OhMyKeymint + PlayIntegrityFork bundled, hardware attestation + Pixel fingerprint kept fresh automatically.
+Strong Play Integrity in one drop-in module. OhMyKeymint 1.3.5 + PlayIntegrityFork bundled, hardware attestation + Pixel fingerprint + keybox kept fresh automatically.

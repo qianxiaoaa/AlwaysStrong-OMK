@@ -1,38 +1,33 @@
 # AlwaysStrong-OMK
 
-## 🛑 不建议使用，维护已暂停（2026-09-30）
+## 状态：恢复维护（2026-10-08，r11）
 
-公开镜像分发的 keybox 最近被**大规模吊销**，"刷进去就能拿到 STRONG"这个前提已经不成立了。
-下面是这台测试机今天实测到的：
+r10 之前一度停维，原因是当时公开镜像分发的 keybox 被**大规模吊销**，"刷进去就能拿到 STRONG"
+这个前提不成立。r11 起恢复维护：默认 keybox 与指纹来源都换成了新的上游，健康状态判定也完全搬到
+本地计算。回看那段历史：
 
-- 设备上那份从 `http://evoker.qzz.io/key` 取来的 keybox（13,579 B，sha256 `286c6680…39d3c`），
-  **ECDSA 与 RSA 两条链的叶证书都在 Google 的吊销名单里**，`REVOKED / KEY_COMPROMISE`。
+- 当时从 `http://evoker.qzz.io/key` 取来的 keybox（13,579 B，sha256 `286c6680…39d3c`），
+  ECDSA 与 RSA 两条链的叶证书都在 Google 的吊销名单里，`REVOKED / KEY_COMPROMISE`。
 - 同一天镜像站换过至少两次 key：13,579 B → 18,108 B → base64 22,572 B（解码 16,927 B）。
-  一份 key 被公开分享，就意味着它随时会进那份名单 —— 这不是模块能修的东西。
-- 换上当时**未吊销**的那份之后，Play Integrity 仍然只给 `MEETS_BASIC_INTEGRITY`。证书链是
-  Google 签发的、`T=TEE`、`Verified`、`deviceLocked: true`、序列号不在名单里。原因是测试机刷的
-  是自定义 ROM，它的 `vbmeta` 根本没有认证块（`algorithm=NONE`，还带着
-  `VERIFICATION_DISABLED + VERITY_DISABLED` 标记），引擎如实上报的引导状态对应不到任何
-  已认证构建。
+  一份 key 被公开分享，就随时会进那份名单。
+- 换上当时未吊销的那份后，Play Integrity 仍只给 `MEETS_BASIC_INTEGRITY`。证书链是 Google 签发的、
+  `T=TEE`、`Verified`、`deviceLocked: true`、序列号不在名单里。原因是测试机刷的是自定义 ROM，
+  它的 `vbmeta` 根本没有认证块，引擎如实上报的引导状态对应不到任何已认证构建。
 
-所以：
-
-- **不建议新装，也不建议继续依赖本模块**去拿 DEVICE / STRONG。决定结果的是密钥与引导链，
-  不是这里的脚本。
-- **本仓库暂停维护**：不再跟进上游、不再定期重打包，issue 和 PR 我可能不会回复。
-- 已经刷上的机器：r9 起模块自己就会校验 keybox（结构 + 吊销名单两道），被吊销的 key 不会被
-  装上，只会保留磁盘上原有的那份并在日志里写清原因。看诊断日志里的 `usable-by-keymint:` 与
-  `revoked-by-google:` 两行，就能判断你那份 key 还有没有救。
-- 最后两个版本的改动见 [CHANGELOG.md](CHANGELOG.md)。r10 的 `vb_hash` / `vb_key` 钉值通道
-  **在真机上还没验证过**，别当成可用功能。
+r11 的改动见 [CHANGELOG.md](CHANGELOG.md)：默认 keybox 改用
+[ZeyolZZZ/TEESimulator-RS-fix](https://github.com/ZeyolZZZ/TEESimulator-RS-fix)，指纹改用
+[Elcapitanoe/PIF-Config-Generator](https://github.com/Elcapitanoe/PIF-Config-Generator) 的稳定
+Pixel 档案，健康状态由模块本地推导（结构 + 引擎存活 + Google 吊销名单），不再依赖第三方镜像。
+r10 的 `vb_hash` / `vb_key` 钉值通道**在真机上仍未验证过**。
 
 ---
 
 **Unofficial AlwaysStrong build whose attestation engine is [OhMyKeymint](https://github.com/qwq233/OhMyKeymint) instead of TEESimulator-RS.**
 
 把 [AlwaysStrong](https://github.com/evoker0/AlwaysStrong) 的硬件密钥证明引擎从 TEESimulator-RS
-换成 OhMyKeymint，其余骨架（PlayIntegrityFork、原生指纹抓取、WebUI、Action 按钮）保持不变。
-刷入即用，目标是让 Play Integrity 拿到 **STRONG**。
+换成 OhMyKeymint（本构建用 `ITxiao6666/OhMyKeymint` 的 `1.3.5` 分支），其余骨架
+（PlayIntegrityFork、原生指纹抓取、WebUI、Action 按钮）保持不变。刷入即用，目标是让 Play Integrity
+拿到 **STRONG**。
 
 ---
 
@@ -51,11 +46,15 @@
 
 | 项目 | 上游 AlwaysStrong v1.0.4 | 本仓库 |
 |---|---|---|
-| 证明引擎 | TEESimulator-RS v6.0.1-307 | **OhMyKeymint 1.2.0-preview-a1f3241** |
+| 证明引擎 | TEESimulator-RS v6.0.1-307 | **OhMyKeymint 1.3.5-196-10113e7**（ITxiao6666 分支） |
 | 引擎适配层 | `attest/tee.sh` | `attest/omk.sh` |
 | 引擎守护 | 无（引擎自管） | `omk-daemon` + `omk-injector` |
 | 早期初始化 | 无 | `omk-early.sh`（post-fs-data 阶段） |
 | 配置桥接 | 无 | `omk-sync.sh`（镜像到 `/data/adb/tricky_store`） |
+| keybox 来源 | 无 | ZeyolZZZ 的 `TEESimulator-RS-fix/module/keybox.xml` |
+| PIF 指纹档案 | 上游 autopif | Elcapitanoe 的 PIF-Config-Generator 稳定档案 |
+| 健康状态 | 无 | 本地推导：结构 + 引擎存活 + Google 吊销名单 |
+| Qualcomm Soter | 无 | 可选中继，默认关闭 |
 | Play Integrity | PlayIntegrityFork v18 | PlayIntegrityFork v18（不变） |
 | 指纹自动刷新 | asfetch + aswatcher | 不变 |
 | WebUI / Action | 有 | 不变 |
@@ -94,13 +93,16 @@
 
 | 组件 | 版本 | 上游 |
 |---|---|---|
-| OhMyKeymint | `1.2.0-preview-a1f3241` | [qwq233/OhMyKeymint](https://github.com/qwq233/OhMyKeymint/releases/tag/1.2.0-preview-a1f3241) |
+| OhMyKeymint | `1.3.5-196-10113e7` | [ITxiao6666/OhMyKeymint](https://github.com/ITxiao6666/OhMyKeymint) |
 | PlayIntegrityFork | `v18` | [osm0sis/PlayIntegrityFork](https://github.com/osm0sis/PlayIntegrityFork) |
+| keybox | ZeyolZZZ `module/keybox.xml` | [ZeyolZZZ/TEESimulator-RS-fix](https://github.com/ZeyolZZZ/TEESimulator-RS-fix) |
+| PIF 指纹档案 | 最新稳定 Pixel 档案 | [Elcapitanoe/PIF-Config-Generator](https://github.com/Elcapitanoe/PIF-Config-Generator) |
 | AlwaysStrong 骨架 | `v1.0.4` | [evoker0/AlwaysStrong](https://github.com/evoker0/AlwaysStrong) |
 | asfetch / aswatcher | 随 AlwaysStrong v1.0.4 | 同上 |
 
-> `1.3.5` 是第三方分支版本，**不是** OhMyKeymint 官方版本；本仓库使用官方
-> `1.2.0-preview-a1f3241`。
+> `1.3.5` 是 ITxiao6666 的第三方分支版本，**不是** OhMyKeymint 官方版本；上游官方
+> [qwq233/OhMyKeymint](https://github.com/qwq233/OhMyKeymint) 目前发布到 `1.2.0-preview`。
+> 本仓库选 `1.3.5` 是为了它随包提供的 `soterta-svc`（Qualcomm Soter 中继）与较新的引擎行为。
 
 ---
 
@@ -186,6 +188,12 @@ module/                模块本体（AlwaysStrong v1.0.4 骨架 + OMK 适配脚
   ├── omk-injector     注入器包装：等待 RPC、失败重试
   ├── omk-early.sh     post-fs-data 阶段：清理跨开机残留标记
   ├── omk-sync.sh      配置桥接：OMK 配置面 ←→ /data/adb/tricky_store
+  ├── keybox_fetch.sh  keybox 拉取（ZeyolZZZ，XML / base64 兼容）
+  ├── keybox_check.sh  keybox 结构校验（接受 dual / RSA-only / EC-only）
+  ├── keybox_revoke_check.sh  对缓存的 Google 吊销名单比对序列号
+  ├── pif_native_fetch.sh  从 PIF-Config-Generator 取最新稳定 Pixel 档案
+  ├── status_fetch.sh  本地推导健康状态（结构 + 引擎存活 + 吊销名单）
+  ├── soterta.sh       Qualcomm Soter 中继看护（可选，默认关闭）
   ├── engine.sh        PlayIntegrityFork 适配层
   ├── service.sh       服务启动 / 监控 / 注入兜底
   └── webroot/         WebUI

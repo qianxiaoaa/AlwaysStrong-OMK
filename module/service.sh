@@ -258,6 +258,10 @@ fi
             log -t "AlwaysStrong" "attestation daemon died, restarting..."
             attest_start
         fi
+        # attest_start is idempotent per daemon (pidfile + cmdline checked), so
+        # calling it on every pass also revives a dead Soter watchdog without
+        # touching the live keystore pair.
+        attest_start 2>/dev/null
         # Re-mirror the config dir into the engine's runtime dir, and catch an
         # injection that lost the race against keystore2's RPC socket. Both are
         # cheap no-ops when there is nothing to do; see attest.sh.
@@ -277,11 +281,12 @@ fi
 # loop's job.
 #
 # It runs the real action.sh, the exact same path a manual press takes: build
-# the target list, fetch the fingerprint with all three sources (native crawl,
-# upstream fetcher, then the shipped local props as a guaranteed fallback),
+# the target list, fetch the fingerprint with all three sources (the
+# PIF-Config-Generator feed, upstream's own fetcher, then the shipped local
+# props as a guaranteed fallback),
 # enforce the STRONG spoof flags, sync the security patch, and restart PI. The
 # old inline copy here skipped the target-list build and the local fingerprint
-# fallback, so on a first boot where the network crawl wasn't ready yet it left
+# fallback, so on a first boot where the network fetch wasn't ready yet it left
 # no usable fingerprint and the device sat at BASIC until a manual press —
 # which is exactly the "first-boot Action doesn't happen" bug. Calling action.sh
 # means there is only one copy of that logic and no weaker duplicate to drift.

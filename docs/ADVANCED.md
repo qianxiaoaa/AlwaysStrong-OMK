@@ -153,8 +153,9 @@ spoofProvider=0 spoofVendingFinger=<自动> spoofBuild=1 spoofProps=1 spoofSigna
 
 1. 把 `module/` 复制到 `build/module/`，并把 `attest/omk.sh` 覆盖为 `attest.sh`；
 2. 把 `native/*/prebuilt/<abi>/` 下的 `asfetch`、`aswatcher` 放进 `bin/<abi>/`；
-3. 下载并解包 OhMyKeymint，取出 `libs/arm64-v8a/{keymint,inject}`、
-   `injector.toml`、`keybox.xml`；
+3. 下载并解包 OhMyKeymint，取出 `libs/arm64-v8a/{keymint,inject,soterta-svc}`、
+   `injector.toml`、`soterta.sh`，以及仅作兜底的 `keybox.xml`（OMK 自带的
+   zygisk / `webroot/` / `daemon/` 一律丢弃）；
 4. 下载并解包 PlayIntegrityFork，取出 `classes.dex`、`zygisk/*.so` 与
    `autopif4.sh`、`killpi.sh`、`migrate.sh`、`common_setup.sh`、
    `example.pif.prop`、`app_replace_list.txt`。

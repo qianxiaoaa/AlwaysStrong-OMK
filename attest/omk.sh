@@ -10,6 +10,12 @@
 # does, but its layout is its own:
 #   - the KeyMint RPC server + the ptrace injector are ELFs under libs/<abi>/
 #     (the injector embeds its own payload, so nothing else ships with them);
+#   - upstream 1.3.5 adds a third ELF, libs/<abi>/soterta-svc, and its driver
+#     soterta.sh: a Qualcomm Soter software-TA relay. soterta.sh is a watchdog
+#     that only takes over vendor.qti.hardware.soter.ISoter/default when its
+#     enable flag exists, and restores the stock HAL otherwise, so starting it
+#     unconditionally is safe on every device. AlwaysStrong ships it but never
+#     enables it (the WebUI flag lives under OMK's own runtime data dir).
 #   - the two supervisor loops are plain shell scripts, not a forked binary.
 #     omk-daemon also owns the one recovery OMK itself lacks: a store it cannot
 #     decrypt — the [crypto] seeds changed under it after an engine swap or a
@@ -46,16 +52,20 @@ attest_install() {
         *) abort "OhMyKeymint ships arm64-v8a binaries only (device ABI: $ABI_DIR)" ;;
     esac
     mkdir -p "$MODPATH/libs/$ABI_DIR"
-    install_file "libs/$ABI_DIR/keymint" "$MODPATH/libs/$ABI_DIR"
-    install_file "libs/$ABI_DIR/inject"  "$MODPATH/libs/$ABI_DIR"
+    install_file "libs/$ABI_DIR/keymint"    "$MODPATH/libs/$ABI_DIR"
+    install_file "libs/$ABI_DIR/inject"     "$MODPATH/libs/$ABI_DIR"
+    install_file "libs/$ABI_DIR/soterta-svc" "$MODPATH/libs/$ABI_DIR"
     install_file "injector.toml" "$MODPATH"
     install_file "omk-daemon"    "$MODPATH"
     install_file "omk-injector"  "$MODPATH"
     install_file "omk-early.sh"  "$MODPATH"
     install_file "omk-sync.sh"   "$MODPATH"
+    install_file "soterta.sh"    "$MODPATH"
     chmod 755 "$MODPATH/libs/$ABI_DIR/keymint" "$MODPATH/libs/$ABI_DIR/inject" \
+              "$MODPATH/libs/$ABI_DIR/soterta-svc" \
               "$MODPATH/omk-daemon" "$MODPATH/omk-injector" \
-              "$MODPATH/omk-early.sh" "$MODPATH/omk-sync.sh" 2>/dev/null
+              "$MODPATH/omk-early.sh" "$MODPATH/omk-sync.sh" \
+              "$MODPATH/soterta.sh" 2>/dev/null
     # OMK's own hot-update slot. Upstream's daemon prefers it over the module
     # copy, and a stale binary left there by a previous OMK install would win
     # over the one we just shipped.
@@ -71,10 +81,12 @@ attest_install() {
 # stack is native and has no such dependency.)
 attest_early() { return 0; }
 
-# Start whichever of OMK's two supervisor loops is not already running.
+# Start whichever of OMK's supervisor loops is not already running.
 # Mirrors upstream service.sh's start_daemon(): the pidfile is only trusted
 # when the pid is alive AND its cmdline still names the script, so a recycled
-# pid never blocks a restart.
+# pid never blocks a restart. The Soter watchdog is started alongside the two
+# keystore loops; it is idle until its enable flag appears, but keeping it up
+# means a flag written by the WebUI is acted on without a reboot.
 attest_start() {
     _omk_start_one() {
         _s="$1"; _pf="$2"
@@ -92,6 +104,11 @@ attest_start() {
     }
     _omk_start_one "$MODDIR/omk-daemon"   "$OMK_STATE_DIR/keymint-daemon.pid"
     _omk_start_one "$MODDIR/omk-injector" "$OMK_STATE_DIR/injector-daemon.pid"
+    # Soter software-TA relay watchdog (Qualcomm WeChat fingerprint). Only the
+    # driver ships; the watchdog stays inert until its enable flag exists.
+    if [ -f "$MODDIR/soterta.sh" ]; then
+        _omk_start_one "$MODDIR/soterta.sh" "$OMK_STATE_DIR/soterta-watchdog.pid"
+    fi
 }
 
 # True while both halves of the engine are up: the KeyMint RPC server and the

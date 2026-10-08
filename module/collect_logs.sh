@@ -18,7 +18,19 @@ MODDIR=$(cd "${0%/*}" 2>/dev/null && pwd)
 # section isn't blank when someone runs the script from /sdcard or /tmp)
 [ -f "$MODDIR/module.prop" ] || MODDIR=/data/adb/modules/tricky_store
 CFG=/data/adb/tricky_store
-KEY_HOST="${KEYBOX_BASE_URL:-http://evoker.qzz.io}"
+# Keybox source, resolved the same way keybox_fetch.sh resolves it, so the
+# probe below tests the host the module actually pulls from. The default is
+# ZeyolZZZ's TEESimulator-RS-fix repo, which serves a raw keybox.xml.
+KEYBOX_URL="${KEYBOX_URL:-}"
+KEYBOX_BASE_URL="${KEYBOX_BASE_URL:-}"
+if [ -n "$KEYBOX_URL" ]; then
+    KURL_SRC="$KEYBOX_URL"
+elif [ -n "$KEYBOX_BASE_URL" ]; then
+    KURL_SRC="$KEYBOX_BASE_URL/key"
+else
+    KURL_SRC="https://raw.githubusercontent.com/ZeyolZZZ/TEESimulator-RS-fix/main/module/keybox.xml"
+fi
+KEY_HOST=$(echo "$KURL_SRC" | sed -e 's#^[a-z]*://##' -e 's#/.*##' -e 's#:.*##')
 STATUS_URL="${KEYBOX_STATUS_URL:-https://android.googleapis.com/attestation/status}"
 
 # The engine identifier is a plain assignment in attest.sh. This script is run by
@@ -434,7 +446,7 @@ for ip in 1.1.1.1 8.8.8.8; do
 done
 # DNS: can the keybox host be resolved? Resolver often comes up late on some
 # AOSP ROMs, which is what leaves them with no keybox on first boot.
-HOST=$(echo "$KEY_HOST" | sed -e 's#^[a-z]*://##' -e 's#/.*##' -e 's#:.*##')
+HOST="$KEY_HOST"
 if command -v getent >/dev/null 2>&1 && getent hosts "$HOST" >/dev/null 2>&1; then
     echo "dns $HOST: ok ($(getent hosts "$HOST" | awk '{print $1}' | tr '\n' ' '))"
 elif [ -n "$BB" ] && "$BB" nslookup "$HOST" >/dev/null 2>&1; then
@@ -457,7 +469,7 @@ test_engine() {
         echo "$_name: FAIL (~$((_t1 - _t0))s)"
     fi
 }
-KURL="$KEY_HOST/key"
+KURL="$KURL_SRC"
 # short timeouts: this is a reachability probe, not the real fetch, and long
 # per-engine stalls are what made pressing the button feel like a freeze.
 [ -n "$ABI" ] && [ -x "$ASFETCH" ] && test_engine "asfetch    $KURL" "$ASFETCH" -T 5 -o "$NT/out" "$KURL" || echo "asfetch: not available for $ABI"

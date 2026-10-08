@@ -34,7 +34,7 @@ MODPATH="${0%/*}"
 # time is the vendor's decision and must not be overridden.
 #
 # The literal is exactly "LEVEL:STRATEGY" and both halves must be spelled this
-# way. Verified against the bundled engine, OhMyKeymint 1.2.0-preview-a1f3241:
+# way. Verified against the bundled engine, OhMyKeymint 1.3.5-196-10113e7:
 # src/keymaster/boot_key.rs parses it with split_once(':') and matches
 # "TRUSTED_ENVIRONMENT"/"STRONGBOX" and "EARLY_BOOT_ONLY"/"MAX_USES_PER_BOOT".
 # A bare MAX_USES_PER_BOOT without the colon is rejected ("Missing colon") and

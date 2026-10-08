@@ -2,9 +2,53 @@
 
 本仓库为第三方二改版本，版本号沿用上游 AlwaysStrong 的 `v1.0.4` 并加 `-omk` 后缀。
 
-> **2026-09-30：公开镜像的 keybox 大规模被吊销，本仓库暂停维护。**
-> 实测证据与理由见 [README.md](README.md) 顶部说明。下面 r9 / r10 两段是停维前的最后两版；
-> 其中 r10 的 `vb_hash` / `vb_key` 钉值通道**未经真机验证**。
+> **历史停维说明（2026-09-30）：公开镜像的 keybox 大规模被吊销，本仓库一度暂停维护。**
+> 自 r11 起恢复维护：条件材料改由新的上游来源提供，不再依赖那个已被吊销的镜像。
+> 下面 r9 / r10 两段保留作记录，其中 r10 的 `vb_hash` / `vb_key` 钉值通道**未经真机验证**。
+
+## v1.0.4-omk-r11 — 2026-10-08
+
+恢复维护。本版把三处外部来源全部换掉，并补上 Qualcomm Soter 中继。
+
+### 变更
+
+- **证明引擎升级**：`OhMyKeymint 1.2.0-preview-a1f3241` → `1.3.5-196-10113e7`
+  （[ITxiao6666/OhMyKeymint](https://github.com/ITxiao6666/OhMyKeymint) 分支，**非官方版本**）。
+  只取 keystore 引擎部分：`libs/arm64-v8a/{keymint,inject,soterta-svc}`、`injector.toml`、
+  `soterta.sh`；OMK 自带的 zygisk、`webroot/`、`daemon/` 一律不要，骨架仍用本仓库原有实现。
+- **keybox 默认来源**换成 [ZeyolZZZ/TEESimulator-RS-fix](https://github.com/ZeyolZZZ/TEESimulator-RS-fix)
+  的 `module/keybox.xml`；`keybox_fetch.sh` 现在同时接受 XML 与 base64 两种载荷（按首字节判断），
+  并支持 `KEYBOX_URL`（整份）/ `KEYBOX_BASE_URL`（`<root>/key`）覆盖。
+- **指纹来源**改为 [Elcapitanoe/PIF-Config-Generator](https://github.com/Elcapitanoe/PIF-Config-Generator)
+  的 release feed：取最新**稳定**（asset 名不含 `_beta_`）的 Pixel 档案，优先按设备代号匹配，
+  优先序 `caiman komodo tegu comet frankel blazer felix husky`（`tokay` 已排除，Google 撤销了它的
+  STRONG）。feed 缓存 6 小时（`$CONFIG_DIR/.pif_feed.json`）。失败时回退到上游 `autopif4.sh`，
+  再回退到内置的两份 `.prop`。
+- **状态行改为本地推导**：删除对 `http://evoker.qzz.io/status` 与 `/meta.json` 的依赖（该镜像
+  提供的是另一份 keybox，与默认来源不是同一个）。现在三段信号各自本地计算：
+  `keybox_check.sh`（结构）、`attest_alive`（引擎存活）、`keybox_revoke_check.sh`（对缓存下来的
+  Google 吊销名单做比对，`$CONFIG_DIR/.kb_status_list`，缓存 24 小时）。被吊销但结构合法的 key
+  呈现 `🟢🟢🔴`，被拒绝的 key 呈现 `🔴🔴🟡`。
+- **Soter 中继（可选）**：随包提供 `soterta.sh` + `libs/<abi>/soterta-svc`，服务
+  `vendor.qti.hardware.soter.ISoter/default`。默认**关闭**，只有显式写入启用标记后才启动；
+  `attest/omk.sh` 的 `attest_start` 会在每轮看护里把它拉起，`omk-early.sh` 准备
+  `/data/misc/keystore/omk/data/soterta`（0770，uid 1017）。
+- `keybox_check.sh` 放宽为接受**纯 EC** 的 keybox（引擎 `keybox.rs` 同时接受 dual / RSA-only /
+  EC-only），错误信息改为 `no <Key algorithm="rsa"> or <Key algorithm="ecdsa"> entry`。
+- `collect_logs.sh`、`webroot/index.html` 去掉镜像相关字段：keybox 名称直接读本地
+  `DeviceID="..."`，日志探针指向真实 keybox 主机。
+
+### 验证
+
+- 离线：`keybox_check.sh` 对 ZeyolZZZ 与 OMK 自带的 keybox 均 rc=0，缺文件 rc=2，
+  纯 EC 合成样本 rc=0，无证书 rc=1。
+- 吊销比对：用 ZeyolZZZ 的叶证书序列号构造合成名单，`REVOKED` 命中 rc=1 并打印
+  `serial=` / `reason=`，`SOON` 与无关序列号 rc=0。
+- 指纹：以真实 feed 跑通 `pif_native_fetch.sh`，选中 `Komodo_CP3A.260905.009.json`
+  （tag `v2026.09.20`），经 PlayIntegrityFork `migrate.sh` 生成完整 `custom.pif.prop`。
+- 构建：`build.sh --omk-file` 产出 12 MB 包，含 `soterta.sh`、
+  `libs/arm64-v8a/{keymint,inject,soterta-svc}`、`injector.toml`、`keybox.xml`。
+- 未在真机上验证：Soter 中继的实际握手、`vb_hash` / `vb_key` 钉值通道（沿用 r10 说明）。
 
 ## v1.0.4-omk-r10 — 2026-09-30
 

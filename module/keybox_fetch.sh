@@ -1,19 +1,31 @@
 #!/system/bin/sh
 # AlwaysStrong — keybox auto-fetch.
 #
-# Downloads a base64-encoded keybox from the project's keybox mirror
-# ($BASE_URL/key), hashes the downloaded bytes locally to detect whether
-# anything changed since the last apply, decodes, validates that the payload
-# looks like a keybox, then atomically replaces the target file. Override the
-# source endpoint with the KEYBOX_BASE_URL env var.
+# Downloads a keybox from a mirror, detects whether it changed since the last
+# apply, validates that the payload is a usable keybox, then atomically replaces
+# the target file. The default source is ZeyolZZZ's TEESimulator-RS-fix
+# repository, which serves a raw keybox.xml; a base64-encoded payload (the
+# legacy .../key mirror) is still detected and decoded, so an override that
+# points at one keeps working.
+#
+# Source override:
+#   KEYBOX_URL        full URL to a raw keybox.xml or a base64 blob
+#   KEYBOX_BASE_URL   legacy mirror root; the key is fetched from <root>/key
 #
 # Exit codes:
 #   0  keybox updated (new content written)
 #   2  no change (already up to date)
 #   1  fetch / verify failed (existing keybox preserved)
 
-BASE_URL="${KEYBOX_BASE_URL:-http://evoker.qzz.io}"
-KEY_URL="$BASE_URL/key"
+KEYBOX_URL="${KEYBOX_URL:-}"
+KEYBOX_BASE_URL="${KEYBOX_BASE_URL:-}"
+if [ -n "$KEYBOX_URL" ]; then
+    KEY_URL="$KEYBOX_URL"
+elif [ -n "$KEYBOX_BASE_URL" ]; then
+    KEY_URL="$KEYBOX_BASE_URL/key"
+else
+    KEY_URL="https://raw.githubusercontent.com/ZeyolZZZ/TEESimulator-RS-fix/main/module/keybox.xml"
+fi
 
 # Google's attestation revocation list. The mirror is a shared key, so it is
 # exactly the kind of key that ends up on this list — and a revoked keybox is
@@ -34,8 +46,8 @@ if [ -f "$CONFIG_DIR/custom_keybox" ]; then
     exit 2
 fi
 
-if [ -z "$BASE_URL" ]; then
-    log "no KEYBOX_BASE_URL configured — skipping."
+if [ -z "$KEY_URL" ]; then
+    log "no keybox source configured — skipping."
     exit 1
 fi
 
@@ -149,13 +161,19 @@ if [ ! -s "$TMP/key" ]; then
 fi
 
 # ---- Decode ----
-# Always decode the downloaded payload, regardless of cache state. That
-# way we can compare the upstream XML byte-for-byte against the file
-# currently on disk — which catches the "user manually swapped the
-# keybox under us" case that a STATE-file-based cache would miss.
-$B64DEC < "$TMP/key" > "$TMP/keybox.xml" 2>/dev/null
+# Always materialise the payload, regardless of cache state. That way we can
+# compare the upstream XML byte-for-byte against the file currently on disk —
+# which catches the "user manually swapped the keybox under us" case that a
+# STATE-file-based cache would miss. A payload that already looks like XML is
+# used as-is (the default raw mirror); anything else is treated as base64 (the
+# legacy .../key mirror). Base64 never contains '<', so the first bytes decide.
+if head -c 256 "$TMP/key" | grep -q '<'; then
+    cp -f "$TMP/key" "$TMP/keybox.xml" 2>/dev/null
+else
+    $B64DEC < "$TMP/key" > "$TMP/keybox.xml" 2>/dev/null || true
+fi
 if [ ! -s "$TMP/keybox.xml" ]; then
-    log "base64 decode produced empty output — bad payload."
+    log "downloaded payload is neither XML nor decodable base64 — bad payload."
     exit 1
 fi
 

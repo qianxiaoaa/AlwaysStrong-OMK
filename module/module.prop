@@ -1,9 +1,9 @@
 id=tricky_store
 name=AlwaysStrong
-version=v1.0.4-omk-r10
-versionCode=10410
-author=Evokerr, JingMatrix, Enginex0, osm0sis, KOWX712, James Clef, qwq233
-description=Strong Play Integrity in one drop-in module. OhMyKeymint + PlayIntegrityFork, auto-refreshed. Tap Action.
+version=v1.0.4-omk-r11
+versionCode=10411
+author=Evokerr, JingMatrix, Enginex0, osm0sis, KOWX712, James Clef, qwq233, ITxiao6666, ZeyolZZZ
+description=Strong Play Integrity in one drop-in module. OhMyKeymint 1.3.5 + PlayIntegrityFork, keybox + Pixel profile auto-refreshed. Tap Action.
 support=https://t.me/keyboxstrong
 donate=https://coindrop.to/evokerrr
 banner=banner.png

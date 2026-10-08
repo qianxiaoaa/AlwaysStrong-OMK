@@ -10,7 +10,9 @@
 #   /data/misc/keystore/omk   runtime state — keybox.xml, injector.toml,
 #                             config.toml, rpc.sock, logs/. Must be owned by the
 #                             keystore uid (1017) at mode 0770 or keystore2
-#                             cannot reach the RPC socket.
+#                             cannot reach the RPC socket. Since OMK 1.3.5 it also
+#                             holds data/soterta/, the Qualcomm Soter relay's flag
+#                             + ledger dir, which must carry the same ownership.
 #   /data/adb/omk             supervisor state — pidfiles, restart flags,
 #                             injector.payload. Upstream also links
 #                             omkdata -> /data/misc/keystore/omk from here.
@@ -18,11 +20,12 @@
 MODDIR=${0%/*}
 OMK_RUN_DIR=/data/misc/keystore/omk
 OMK_STATE_DIR=/data/adb/omk
+OMK_SOTER_DIR="$OMK_RUN_DIR/data/soterta"
 CONFIG_DIR=/data/adb/tricky_store
 
-mkdir -p "$OMK_RUN_DIR" "$OMK_RUN_DIR/logs"
-chmod 0770 "$OMK_RUN_DIR" "$OMK_RUN_DIR/logs" 2>/dev/null
-chown 1017:1017 "$OMK_RUN_DIR" "$OMK_RUN_DIR/logs" 2>/dev/null
+mkdir -p "$OMK_RUN_DIR" "$OMK_RUN_DIR/logs" "$OMK_SOTER_DIR"
+chmod 0770 "$OMK_RUN_DIR" "$OMK_RUN_DIR/logs" "$OMK_SOTER_DIR" 2>/dev/null
+chown 1017:1017 "$OMK_RUN_DIR" "$OMK_RUN_DIR/logs" "$OMK_SOTER_DIR" 2>/dev/null
 
 mkdir -p "$OMK_STATE_DIR"
 rm -f "$OMK_STATE_DIR/keymint-daemon.pid" "$OMK_STATE_DIR/injector-daemon.pid"

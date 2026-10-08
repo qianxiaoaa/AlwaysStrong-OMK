@@ -9,7 +9,7 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
 
 | 组件 | 版本 | 著作权人 | 许可证 | 上游 |
 |---|---|---|---|---|
-| OhMyKeymint | `1.2.0-preview-a1f3241` | qwq233 及贡献者 | AGPL-3.0-or-later + 附加条款 | https://github.com/qwq233/OhMyKeymint |
+| OhMyKeymint | `1.3.5-196-10113e7`（ITxiao6666 分支） | qwq233、ITxiao6666 及贡献者 | AGPL-3.0-or-later + 附加条款 | https://github.com/ITxiao6666/OhMyKeymint |
 | AlwaysStrong | `v1.0.4` | Evokerr (evoker0) 及贡献者 | GPL-3.0 | https://github.com/evoker0/AlwaysStrong |
 | PlayIntegrityFork | `v18` | osm0sis 及贡献者 | GPL-3.0 | https://github.com/osm0sis/PlayIntegrityFork |
 
@@ -50,7 +50,7 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
 本仓库相对上游 AlwaysStrong v1.0.4 的修改（修改日期：2026-09-28）：
 
 - 将证明引擎由 **TEESimulator-RS v6.0.1-307** 替换为
-  **OhMyKeymint 1.2.0-preview-a1f3241**。
+  **OhMyKeymint 1.3.5-196-10113e7**（ITxiao6666 分支，官方 1.2.0-preview 的衍生版）。
 - 新增适配层 `attest/omk.sh`（构建时覆盖为模块内的 `attest.sh`），
   替代上游的 `attest/tee.sh`。
 - 新增模块脚本：`omk-daemon`、`omk-injector`、`omk-early.sh`、`omk-sync.sh`。
@@ -63,6 +63,15 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
 - `omk-early.sh`：新增跨开机 `keymint.log.store-reset` 标记清理。
 - 未引入上游 OhMyKeymint 的 TCP 调试面；SELinux 规则为「AlwaysStrong 原规则
   ∪ 上游 OMK 规则」。
+
+### r11 追加修改（修改日期：2026-10-08）
+
+- 引擎升级到 **OhMyKeymint 1.3.5-196-10113e7**（ITxiao6666 分支），仅取 keystore 引擎部分
+  （`libs/arm64-v8a/{keymint,inject,soterta-svc}`、`injector.toml`、`soterta.sh`），
+  不使用 OMK 自带的 zygisk / `webroot/` / `daemon/`。
+- 新增可选的 Qualcomm Soter 中继看护 `soterta.sh`（默认关闭）。
+- keybox 默认来源改为 `ZeyolZZZ/TEESimulator-RS-fix`；PIF 指纹档案来源改为
+  `Elcapitanoe/PIF-Config-Generator`；模块健康状态改为本地推导，移除对第三方状态镜像的依赖。
 
 上游文件的完整源码见各自仓库；本仓库中未修改的上游脚本保留其原始版权头。
 

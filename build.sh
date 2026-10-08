@@ -9,8 +9,8 @@
 #
 # plus two upstream release payloads, which are never committed here:
 #
-#   OhMyKeymint 1.2.0-preview-a1f3241   libs/arm64-v8a/{keymint,inject},
-#                                       injector.toml, keybox.xml
+#   OhMyKeymint v1.3.5-196-10113e7      libs/arm64-v8a/{keymint,inject,soterta-svc},
+#                                       injector.toml, keybox.xml, soterta.sh
 #   PlayIntegrityFork v18               classes.dex, zygisk/*.so, the PIF scripts
 #
 # Usage:
@@ -28,9 +28,9 @@ BUILD="$ROOT/build"
 STAGE="$BUILD/module"
 OUT="$ROOT/out"
 
-OMK_TAG="1.2.0-preview-a1f3241"
-OMK_ASSET="OhMyKeymint-release-arm64-v8a-1.2.0-a1f3241.zip"
-OMK_URL="https://github.com/qwq233/OhMyKeymint/releases/download/$OMK_TAG/$OMK_ASSET"
+OMK_TAG="v1.3.5-196-10113e7"
+OMK_ASSET="OhMyKeymint-1.3.5-196-10113e7-release.zip"
+OMK_URL="https://github.com/ITxiao6666/OhMyKeymint/releases/download/$OMK_TAG/$OMK_ASSET"
 
 PIF_TAG="v18"
 PIF_ASSET="PlayIntegrityFork-v18.zip"
@@ -168,15 +168,25 @@ OMK_X="$BUILD/omk_extracted"
 rm -rf "$OMK_X"; mkdir -p "$OMK_X"
 unzip -qq -o "$OMK_ZIP" -d "$OMK_X"
 
-for f in keymint inject; do
+# Only the keystore-engine half is lifted out. OMK 1.3.5 also ships its own
+# Zygisk PIF payload (zygisk/*.so), an embedded WebUI (webroot/), and its own
+# daemon/daemon-injector — AlwaysStrong already provides all of those (bundled
+# PlayIntegrityFork, its own WebUI, and omk-daemon/omk-injector which add the
+# undecryptable-store recovery), so staging them again would only create two
+# competing Fingerprint vendors. soterta-svc + soterta.sh ARE staged: the
+# Qualcomm Soter software-TA relay has no AlwaysStrong equivalent.
+for f in keymint inject soterta-svc; do
     [ -f "$OMK_X/libs/$OMK_ABI/$f" ] || die "OhMyKeymint zip missing libs/$OMK_ABI/$f — upstream layout changed"
 done
 [ -f "$OMK_X/injector.toml" ] || die "OhMyKeymint zip missing injector.toml — upstream layout changed"
+[ -f "$OMK_X/soterta.sh" ]    || die "OhMyKeymint zip missing soterta.sh — upstream layout changed"
 
 mkdir -p "$STAGE/libs/$OMK_ABI"
-cp "$OMK_X/libs/$OMK_ABI/keymint" "$STAGE/libs/$OMK_ABI/keymint"
-cp "$OMK_X/libs/$OMK_ABI/inject"  "$STAGE/libs/$OMK_ABI/inject"
-cp "$OMK_X/injector.toml"         "$STAGE/injector.toml"
+for f in keymint inject soterta-svc; do
+    cp "$OMK_X/libs/$OMK_ABI/$f" "$STAGE/libs/$OMK_ABI/$f"
+done
+cp "$OMK_X/injector.toml" "$STAGE/injector.toml"
+cp "$OMK_X/soterta.sh"    "$STAGE/soterta.sh"
 
 # Default keybox, used only when the user has none of their own.
 [ -f "$OMK_X/keybox.xml" ] && cp "$OMK_X/keybox.xml" "$STAGE/keybox.xml"
@@ -261,7 +271,8 @@ ok "every staged script has an installer ($(wc -l < "$NAMES_LIST" | tr -d ' ') n
 # ---------- 5) permissions + package ----------
 chmod 0755 "$STAGE"/*.sh 2>/dev/null || true
 chmod 0755 "$STAGE/omk-daemon" "$STAGE/omk-injector" 2>/dev/null || true
-chmod 0755 "$STAGE/libs/$OMK_ABI/keymint" "$STAGE/libs/$OMK_ABI/inject" 2>/dev/null || true
+chmod 0755 "$STAGE/libs/$OMK_ABI/keymint" "$STAGE/libs/$OMK_ABI/inject" \
+           "$STAGE/libs/$OMK_ABI/soterta-svc" 2>/dev/null || true
 for abi in $ABIS; do
     chmod 0755 "$STAGE/bin/$abi/asfetch"  2>/dev/null || true
     chmod 0755 "$STAGE/bin/$abi/aswatcher" 2>/dev/null || true

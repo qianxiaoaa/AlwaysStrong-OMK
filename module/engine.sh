@@ -114,7 +114,7 @@ engine_install_pif() {
     return 0
 }
 
-# engine_autopif — upstream's own fetcher; the fallback when our native crawl
+# engine_autopif — upstream's own fetcher; the fallback when the primary feed
 # fails. Leaves the engine's prop file in place. 0 on success.
 engine_autopif() {
     [ -f "$MODPATH/autopif4.sh" ] || return 1
@@ -141,7 +141,7 @@ engine_enforce_spoof() {
     done
 }
 
-# Seconds before the native crawl / upstream fetcher are killed. Generous on
+# Seconds before the primary feed / upstream fetcher are killed. Generous on
 # purpose: both fetchers time out on their own when nothing arrives (idle
 # timeouts / a no-progress watchdog), so these only backstop a stuck process —
 # a slow 2G link that is still delivering bytes must not be cut off here.
