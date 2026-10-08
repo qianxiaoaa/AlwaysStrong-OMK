@@ -553,3 +553,11 @@ r6 的 pin 已经让 KeyMint 实例选择稳定下来（`level-zero KM strategy`
 - 不能与独立 OhMyKeymint 模块同时安装。
 - 从其他 OMK 引擎切换过来的**首次开机**，旧密钥 blob 可能无法解密，
   自愈逻辑会重建私有存储；此时旧应用密钥失效属预期行为。
+
+---
+
+## 捐赠
+
+创作不易，感谢支持。
+
+![捐赠二维码](./module/webroot/donate.png)
