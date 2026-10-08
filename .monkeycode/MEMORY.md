@@ -36,6 +36,7 @@ This file records user instructions, preferences, and teachings for reference in
   - The configured git credential helper (`/app/agent/bin/agent git-credential-helper`) returns HTTP 500 in this environment, so `git credential fill` and a plain `git push` fail with "could not read Username". `/root/.git-credentials` is absent and `gh` is not logged in.
   - Workaround that works: pass an explicit token via an auth header, never embed it in the remote URL or echo it:
     `git -c credential.helper= -c http.extraHeader="Authorization: Basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)" push fork <ref>`
+  - Simpler alternative verified 2026-10-08: write `machine github.com login x-access-token password <PAT>` into `/root/.netrc` (chmod 600, via the Write tool so the token stays out of shell history), then plain `git push fork main` works; the token account is `qianxiaoaa` and cannot push `origin` (UtMostUR).
   - The GitHub Releases API works with the same token; create the release via `POST /repos/<owner>/<repo>/releases`, then upload the asset to its `upload_url`.
 
 [Project Knowledge Summary]
