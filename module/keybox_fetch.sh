@@ -174,8 +174,11 @@ if [ -n "$KEY_URL" ]; then
     fetch_single "$KEY_URL" || { log "download failed on all engines ($KEY_URL)"; exit 1; }
 elif [ -f "$KB_SRC" ]; then
     # Default: the multi-source pool. The helper does its own structural and
-    # revocation filtering and prints the chosen source name on stdout.
-    if sh "$KB_SRC" collect "$TMP/keybox.xml" >"$TMP/kbsrc.name" 2>"$TMP/kbsrc.log"; then
+    # revocation filtering and prints the chosen source name on stdout. Forward
+    # the config knobs explicitly — this child does not inherit shell variables
+    # that were only assigned, not exported.
+    if CONFIG_DIR="$CONFIG_DIR" KEYBOX_ACCEL="${KEYBOX_ACCEL:-}" KEYBOX_STATUS_URL="${KEYBOX_STATUS_URL:-}" \
+        sh "$KB_SRC" collect "$TMP/keybox.xml" >"$TMP/kbsrc.name" 2>"$TMP/kbsrc.log"; then
         log "source: $(cat "$TMP/kbsrc.name" 2>/dev/null)"
     else
         sed 's/^/keybox_fetch: /' "$TMP/kbsrc.log" 2>/dev/null

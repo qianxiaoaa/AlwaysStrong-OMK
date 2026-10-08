@@ -2,6 +2,14 @@
 
 本仓库是在 [AlwaysStrong-OMK](https://github.com/UtMostUR/AlwaysStrong-OMK)（二改）基础上的**三改**版本，三改作者为 **浅笑呐**（Telegram：https://t.me/AlwaysStrongR ）。版本号沿用上游 AlwaysStrong 的 `v1.0.x` 并加 `-omk-rN` 后缀。
 
+## v1.0.5-omk-r3
+
+- 修复 `keybox_fetch.sh` 调用 `keybox_sources.sh` 时未传递 `CONFIG_DIR` / `KEYBOX_ACCEL` / `KEYBOX_STATUS_URL` 的问题：子进程不继承仅赋值、未导出的 shell 变量，导致这三项覆盖对多源池不生效。
+
+**Bundled in every build of this release**
+- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
+- Play Integrity: PlayIntegrityFork `v18`
+
 ## v1.0.5-omk-r2
 
 - keybox 采集改为多源池：移植 yypm 的 `php-server/lib/sources.php`，新增 `module/keybox_sources.sh`，按优先级拉取 yurikey（base64）、integritybox / megatron（10 轮 base64→hex→rot13），并轮换 keyboxhub / keyboxstatus 集合仓库目录，逐个校验结构 + 吊销后择优；`KEYBOX_URL` / `KEYBOX_BASE_URL` 单源覆盖保留，原 ZeyolZZZ 单镜像降级为最后兜底。
