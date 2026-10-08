@@ -1,0 +1,25 @@
+{
+  "_readme": "组件分发源（AlwaysStrong-OMK）。scripts/gen-packages.py 按此从上游 GitHub release 取最新包，计算 sha256、解析 zip 内 module.prop 版本、Ed25519 签名，产出 mirror-data 分支的 mirror/packages.json（+ .sig）。type: ksu-module（ksud/magisk 安装）| apk（pm install -r）。asset_match: 资产文件名正则。auto: true 时客户端在开启 components_auto 后会自动安装（默认关闭，需用户显式打开）；false 仅手动。package: type=apk 时的应用包名。pin_url（可选）: 直接固定下载地址，跳过 latest 解析。",
+  "Zygisk-Next.zip": {
+    "github_release": "LSPosed/ZygiskNext",
+    "asset_match": "Zygisk-Next-.*-release\\.zip$",
+    "type": "ksu-module",
+    "auto": true,
+    "note": "KernelSU 环境提供 Zygisk（HMA-OSS 等模块的运行前提）"
+  },
+  "HMA-OSS.zip": {
+    "github_release": "frknkrc44/HMA-OSS",
+    "asset_match": "HMA-OSS-ZYGISK-.*-release\\.zip$",
+    "type": "ksu-module",
+    "auto": false,
+    "note": "Zygisk 版隐藏应用列表（无需 LSPosed；依赖 Zygisk-Next；自带管理 App）"
+  },
+  "FuseFixer.apk": {
+    "github_release": "5ec1cff/FuseFixer",
+    "asset_match": "\\.apk$",
+    "type": "apk",
+    "package": "io.github.a13e300.fusefixer",
+    "auto": false,
+    "note": "FUSE 修复（部分检测器整改项）；装完还需在 LSPosed 里启用并勾选系统框架"
+  }
+}

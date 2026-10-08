@@ -197,6 +197,24 @@ sh /data/adb/modules/tricky_store/collect_logs.sh
 
 ---
 
+## 组件分发（签名应用商店）
+
+在自更新之外，还能分发第三方组件（Zygisk-Next / HMA-OSS / FuseFixer 等）：
+
+- 注册表 `packages/sources.json` 声明组件与上游仓库/资产匹配规则；`scripts/gen-packages.py`
+  解析最新 release、计算 sha256、读取 zip 内 module.prop 版本，并用同一把 Ed25519 私钥
+  对每个包签名，产出索引 `mirror/packages.json` + 分离签名 `mirror/packages.json.sig`。
+- `.github/workflows/packages.yml`（每日定时 + 手动触发）经 `scripts/publish-packages.sh`
+  把索引提交到 `mirror-data` 分支。
+- 设备端 `module/components.sh`：先验签整份索引，再逐项下载并校验 sha256 + Ed25519；
+  模块用 ksud / magisk 安装（重启生效），APK 用 `pm install -r`（即时生效）。
+- **默认不自动安装**：`touch /data/adb/tricky_store/components_auto` 才允许自动安装
+  `x-auto=1` 的组件；安装 APK 另需 `touch .../components_allow_apk`；`no_components`
+  可整体关闭。手动：`sh $MODPATH/action.sh components {list|check|update|install <name>}`，
+  或 WebUI 的「组件」按钮。
+
+---
+
 ## 目录结构
 
 ```
@@ -213,6 +231,7 @@ module/                模块本体（AlwaysStrong v1.0.4 骨架 + OMK 适配脚
   ├── pif_native_fetch.sh  从 PIF-Config-Generator 取最新稳定 Pixel 档案
   ├── status_fetch.sh  本地推导健康状态（结构 + 引擎存活 + 吊销名单）
   ├── self_update.sh   签名式自更新：拉清单 → 验签 → 交 root 管理器安装
+  ├── components.sh    签名式组件分发：验签索引 → 下载校验 → 安装（模块/APK）
   ├── pubkey.b64       Ed25519 公钥（自更新信任根）
   ├── soterta.sh       Qualcomm Soter 中继看护（可选，默认关闭）
   ├── engine.sh        PlayIntegrityFork 适配层

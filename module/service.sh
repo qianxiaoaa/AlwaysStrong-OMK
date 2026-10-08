@@ -411,6 +411,21 @@ fi
                 sh "$MODDIR/self_update.sh" 2>&1 | log -t "AlwaysStrong-update"
             fi
         fi
+        # Signed component auto-install (once per day; opt in with the
+        # `components_auto` marker). components.sh re-checks the marker itself,
+        # verifies the signed index + every package, and installs only the
+        # entries flagged x-auto=1 (APKs additionally need components_allow_apk).
+        if [ -f "$CFG/components_auto" ] && [ -x "$MODDIR/components.sh" ]; then
+            _cs="$CFG/.components.stamp"
+            _cnow=$(date +%s 2>/dev/null)
+            case "$_cnow" in ''|*[!0-9]*) _cnow=0 ;; esac
+            _clast=$(cat "$_cs" 2>/dev/null)
+            case "$_clast" in ''|*[!0-9]*) _clast=0 ;; esac
+            if [ "$_cnow" -gt 0 ] && [ $(( _cnow - _clast )) -ge 86400 ]; then
+                echo "$_cnow" > "$_cs" 2>/dev/null
+                sh "$MODDIR/components.sh" auto 2>&1 | log -t "AlwaysStrong-components"
+            fi
+        fi
         # Mirror whatever the pass above changed (keybox, target list, patch
         # level) into the attestation engine's own runtime dir. No-op when
         # nothing moved, so it never bounces the engine for free.

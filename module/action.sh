@@ -32,6 +32,14 @@ if [ "$1" = "update" ] && [ -x "$MODPATH/self_update.sh" ]; then
     exit $?
 fi
 
+# `action.sh components [list|check|update|install NAME]` — signed component
+# distribution (Zygisk-Next / HMA-OSS / FuseFixer ...), then exit.
+if [ "$1" = "components" ] && [ -x "$MODPATH/components.sh" ]; then
+    shift
+    sh "$MODPATH/components.sh" "$@"
+    exit $?
+fi
+
 CONFIG_DIR=/data/adb/tricky_store
 LINE="========================="
 VER=$(grep -m1 '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2-)

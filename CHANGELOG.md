@@ -2,6 +2,18 @@
 
 本仓库是在 [AlwaysStrong-OMK](https://github.com/UtMostUR/AlwaysStrong-OMK)（二改）基础上的**三改**版本，三改作者为 **浅笑呐**（Telegram：https://t.me/AlwaysStrongR ）。版本号沿用上游 AlwaysStrong 的 `v1.0.x` 并加 `-omk-rN` 后缀。
 
+## v1.0.5-omk-r5
+
+- 新增**签名式组件分发**（Phase 3，参考 yypm 的组件应用商店设计，改为纯 GitHub Actions 实现）：
+- 注册表 `packages/sources.json` 声明组件（Zygisk-Next / HMA-OSS / FuseFixer）；`scripts/gen-packages.py` 解析上游 release、计算 sha256、读取 zip 内 module.prop 版本、Ed25519 签名，产出 `mirror/packages.json` + 分离签名 `.sig`。
+- 发布链路：`scripts/publish-packages.sh` + `.github/workflows/packages.yml`（每日定时 + 手动），把 `mirror/packages.json(.sig)` 提交到 `mirror-data` 分支。
+- 设备端 `module/components.sh`：验签索引 → 列/查/装；每个组件下载后再校验 sha256 + Ed25519；模块走 ksud/magisk 安装，APK 走 pm install -r。
+- 默认关闭自动安装：开启 auto 需 `touch $CONFIG_DIR/components_auto`，安装 APK 需 `components_allow_apk`；`no_components` 可整体关闭。`action.sh components` 手动操作，WebUI 新增「组件」按钮。
+
+**Bundled in every build of this release**
+- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
+- Play Integrity: PlayIntegrityFork `v18`
+
 ## v1.0.5-omk-r4
 
 - 新增**签名式自更新**（Phase 2，参考 yypm 的 Ed25519 清单/验签设计，改为纯 GitHub Actions 实现）：

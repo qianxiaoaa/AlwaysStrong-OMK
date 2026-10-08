@@ -101,6 +101,19 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
   Actions Secret `ALWAYSSTRONG_SIGNING_KEY`，不进入仓库。
 - 说明：同上，yypm 无许可证声明；此处为独立实现 + 思路借鉴，并标注来源。
 
+### r5 追加修改（修改日期：2026-10-08）
+
+- 新增**签名式组件分发**（"带签名的应用商店"），设计参考 **yypm**（服务端
+  `lib/packages.php` / `fetch_packages.php` / `package/sources.json` 的组件注册与
+  上游 release 抓取、`update.php::build_package_manifest` 的逐包签名、客户端
+  `common.sh` 的 `check_updates` / `download_packages` / `auto_install_packages` /
+  `install_all_packages` 流程），改为**纯 GitHub Actions** 实现（无自建服务端）：
+  - `packages/sources.json`：组件注册表（移植 yypm 的 `sources.json` 结构）。
+  - `scripts/gen-packages.py`：解析上游 release + 逐包 Ed25519 签名 + 生成索引与分离签名。
+  - `scripts/publish-packages.sh` + `.github/workflows/packages.yml`：发布到 `mirror-data`。
+  - `module/components.sh`：端侧验签、下载、安装（ksud/magisk 或 pm install）。
+- 说明：yypm 无许可证声明；本处为独立实现 + 思路借鉴，并按 POSIX sh 重写，标注来源。
+
 上游文件的完整源码见各自仓库；本仓库中未修改的上游脚本保留其原始版权头。
 
 ---
