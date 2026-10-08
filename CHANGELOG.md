@@ -2,6 +2,21 @@
 
 本仓库是在 [AlwaysStrong-OMK](https://github.com/UtMostUR/AlwaysStrong-OMK)（二改）基础上的**三改**版本，三改作者为 **浅笑呐**（Telegram：https://t.me/AlwaysStrongR ）。版本号沿用上游 AlwaysStrong 的 `v1.0.x` 并加 `-omk-rN` 后缀。
 
+## v1.0.5-omk-r7
+
+- 把上游 **yypm**（yangyang8002/yypm）整套 WebUI + 后端移植进本模块，并全部改指向本项目：
+  - 后端 `common.sh` + `webui.sh` + `yypm_service.sh` 随包分发；keybox 走「本项目镜像优先、上游 yypm 兜底」，组件分发与模块自更新改指向本项目 `qianxiaoaa/AlwaysStrong-OMK`。
+  - WebUI 换成 yypm 的界面（含环境对抗页：隐藏 BL、关调试、HMA-OSS 自动配置、SUSFS 加固、反挂检查、检测整改等），文案与主题均重命名为 AlwaysStrong。
+  - 双信任根：本项目密钥（组件/自更新/本项目镜像）为主，上游 yypm 密钥仅用于其 mirror/manifest 的 keybox 兜底。
+  - 组件自动安装默认**关闭**（沿用本模块「需显式开启」约定），WebUI「附属模块更新」新增开关；手动「一键安装」不受该开关限制。
+  - keybox 写入 `/data/adb/tricky_store/keybox.xml` 后热同步进 OhMyKeymint 运行时（`omk-sync.sh`），拉取后即时生效。
+  - 运行状态隔离在 `/data/adb/tricky_store/yypm/`，模块 id / 数据目录仍为 `tricky_store`。
+- 定时任务改由 yypm 后端主循环统一负责 keybox / 组件 / 自更新，`service.sh` 原 hourly 循环不再重复拉取（避免双写入者）。
+
+**Bundled in every build of this release**
+- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
+- Play Integrity: PlayIntegrityFork `v18`
+
 ## v1.0.5-omk-r6
 
 - 新增**赞赏码**：CHANGELOG 底部展示微信赞赏码，仓库与模块随包内置 `webroot/donate.png`。

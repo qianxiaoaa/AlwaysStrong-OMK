@@ -11,6 +11,7 @@
 # safe. The device trusts a key, not a server.
 #
 # Usage:
+#   components.sh status           offline: feature gate, opt-in flags, cached summary
 #   components.sh list             list index entries
 #   components.sh check            compare index vs installed (writes cache)
 #   components.sh install <name>   download+verify+install one entry
@@ -370,6 +371,38 @@ cmd_auto() {
 }
 
 ACTION="${1:-check}"
+
+# ---- offline status for the WebUI panel -------------------------------------
+# No network: reports the feature gate, the opt-in flags, and the last `check`
+# run's cached summary + per-component list. Never blocks the UI on a fetch.
+flag_on() { [ -f "$CONFIG_DIR/$1" ] && echo 1 || echo 0; }
+cmd_status() {
+    if [ -f "$CONFIG_DIR/no_components" ] || [ "$COMPONENTS_DISABLE" = "1" ]; then
+        echo "COMP_ENABLED=0"
+        echo "COMP_AUTO=$(flag_on components_auto)"
+        echo "COMP_APK=$(flag_on components_allow_apk)"
+        echo "COMP_STATE=DISABLED"
+        return 0
+    fi
+    echo "COMP_ENABLED=1"
+    echo "COMP_AUTO=$(flag_on components_auto)"
+    echo "COMP_APK=$(flag_on components_allow_apk)"
+    if [ -f "$CONFIG_DIR/components.prop" ]; then
+        sed -e 's/^state=/COMP_STATE=/' -e 's/^checked_at=/COMP_CHECKED_AT=/' \
+            -e 's/^new=/COMP_NEW=/' -e 's/^upd=/COMP_UPD=/' \
+            -e 's/^ok=/COMP_OK=/' -e 's/^total=/COMP_TOTAL=/' \
+            "$CONFIG_DIR/components.prop" 2>/dev/null
+    else
+        echo "COMP_STATE=NONE"
+    fi
+    [ -f "$CONFIG_DIR/components_check.txt" ] && cat "$CONFIG_DIR/components_check.txt" 2>/dev/null
+    return 0
+}
+
+# `status` is read-only and reports the disabled state itself, so it runs before
+# the global disabled gate below.
+if [ "$ACTION" = "status" ]; then cmd_status; exit $?; fi
+
 if [ -f "$CONFIG_DIR/no_components" ] || [ "$COMPONENTS_DISABLE" = "1" ]; then
     echo "COMP_STATE=DISABLED"
     exit 2
@@ -381,6 +414,6 @@ case "$ACTION" in
     install) shift; cmd_install "$@" ;;
     update)  cmd_update ;;
     auto)    cmd_auto ;;
-    *)       echo "usage: components.sh {list|check|install <name>|update|auto}"; exit 2 ;;
+    *)       echo "usage: components.sh {status|list|check|install <name>|update|auto}"; exit 2 ;;
 esac
 exit $?

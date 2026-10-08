@@ -385,47 +385,15 @@ fi
             # resetting (spoofVendingFinger 1 -> 0). No-op with no PIF present.
             sh "$MODDIR/lite_pif_sync.sh" 2>&1 | log -t "AlwaysStrong-hourly"
         fi
-        if [ ! -f "$CFG/custom_keybox" ] && [ ! -f "$CFG/no_auto_keybox" ] && [ -x "$MODDIR/keybox_fetch.sh" ]; then
-            kbout=$(sh "$MODDIR/keybox_fetch.sh" 2>&1)
-            kbrc=$?
-            [ -n "$kbout" ] && echo "$kbout" | log -t "AlwaysStrong-hourly"
-            if [ "$kbrc" = "0" ]; then
-                log -t "AlwaysStrong-hourly" "keybox updated, restarting PI"
-                killall -9 com.google.android.gms.unstable 2>/dev/null
-                killall -9 com.android.vending 2>/dev/null
-            fi
-        fi
-        # Signed module self-update (once per day; opt out with no_auto_update).
-        # Fetches the signed manifest, and only when a newer versionCode is
-        # advertised does it download + verify + hand the zip to the manager.
-        # The stamp throttles the manifest GET to daily even though this loop is
-        # hourly; after the install lands it activates on the next reboot.
-        if [ ! -f "$CFG/no_auto_update" ] && [ -x "$MODDIR/self_update.sh" ]; then
-            _us="$CFG/.self_update.stamp"
-            _unow=$(date +%s 2>/dev/null)
-            case "$_unow" in ''|*[!0-9]*) _unow=0 ;; esac
-            _ulast=$(cat "$_us" 2>/dev/null)
-            case "$_ulast" in ''|*[!0-9]*) _ulast=0 ;; esac
-            if [ "$_unow" -gt 0 ] && [ $(( _unow - _ulast )) -ge 86400 ]; then
-                echo "$_unow" > "$_us" 2>/dev/null
-                sh "$MODDIR/self_update.sh" 2>&1 | log -t "AlwaysStrong-update"
-            fi
-        fi
-        # Signed component auto-install (once per day; opt in with the
-        # `components_auto` marker). components.sh re-checks the marker itself,
-        # verifies the signed index + every package, and installs only the
-        # entries flagged x-auto=1 (APKs additionally need components_allow_apk).
-        if [ -f "$CFG/components_auto" ] && [ -x "$MODDIR/components.sh" ]; then
-            _cs="$CFG/.components.stamp"
-            _cnow=$(date +%s 2>/dev/null)
-            case "$_cnow" in ''|*[!0-9]*) _cnow=0 ;; esac
-            _clast=$(cat "$_cs" 2>/dev/null)
-            case "$_clast" in ''|*[!0-9]*) _clast=0 ;; esac
-            if [ "$_cnow" -gt 0 ] && [ $(( _cnow - _clast )) -ge 86400 ]; then
-                echo "$_cnow" > "$_cs" 2>/dev/null
-                sh "$MODDIR/components.sh" auto 2>&1 | log -t "AlwaysStrong-components"
-            fi
-        fi
+        # keybox / 自更新 / 组件分发现在由 yypm 后端统一负责（见 yypm_service.sh +
+        # webui.sh）：keybox 走「本项目镜像优先、上游 yypm 兜底」，组件读本项目的
+        # packages.json。这里不再重复拉取，避免两个写入者同时改 keybox.xml / 重复装组件。
+        # 只保留把最新配置镜像进 OMK 运行时的那一步（下方 attest_sync）。
+        # Signed module self-update + signed component auto-install are now owned
+        # by the yypm backend (common.sh install_all_packages / check_module_update,
+        # driven by yypm_service.sh). Our legacy self_update.sh / components.sh
+        # remain packaged for manual/diagnostic use but are not run on a timer here,
+        # so there is exactly one automatic writer per artifact.
         # Mirror whatever the pass above changed (keybox, target list, patch
         # level) into the attestation engine's own runtime dir. No-op when
         # nothing moved, so it never bounces the engine for free.
@@ -436,3 +404,13 @@ fi
         fi
     done
 }&
+
+# --- yypm 后端主循环（本项目移植版）-------------------------------------
+# keybox 获取 / 组件分发 / 模块自更新 / 环境对抗（隐藏 BL、关调试、HMA、
+# SUSFS、反挂等）都由 yypm 的 common.sh + webui.sh 体系承担，入口是
+# yypm_service.sh。它自带 while 循环，检查间隔读 config.prop 的
+# check_interval（WebUI「更新」页可改），与上面的 hourly 循环互相独立。
+# 反挂锁定 / 仅 WiFi / 自动获取开关均由它内部自判，这里只负责拉起。
+if [ -x "$MODDIR/yypm_service.sh" ]; then
+    { sh "$MODDIR/yypm_service.sh" 2>&1 | log -t "AlwaysStrong-yypm"; } &
+fi

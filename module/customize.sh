@@ -100,6 +100,10 @@ for f in module.prop service.sh post-fs-data.sh action.sh \
          pif_native_fetch.sh prop_unify.sh logcat_cleanup.sh collect_logs.sh \
          import_pif.sh reapply_spoof.sh lite_pif_sync.sh self_update.sh \
          components.sh \
+         common.sh webui.sh yypm_service.sh \
+         appinfo.dex appinfo.sha256 \
+         detect_risk_apps.txt detect_trace_paths.txt \
+         pubkey.yypm.b64 pubkey.yypm.fp \
          pif_fallback_1.prop pif_fallback_2.prop \
          target.txt pubkey.b64 pubkey.fp \
          $ENGINE_FILES ; do
