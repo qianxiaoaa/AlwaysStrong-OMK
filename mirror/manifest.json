@@ -1,14 +1,14 @@
 {
-  "version": "v1.0.5-omk-r6",
-  "version_code": 10506,
+  "version": "v1.0.5-omk-r7",
+  "version_code": 10507,
   "repo": "qianxiaoaa/AlwaysStrong-OMK",
-  "generated_at": "2026-10-08T09:22:38Z",
+  "generated_at": "2026-10-08T10:06:38Z",
   "module": {
-    "url": "https://github.com/qianxiaoaa/AlwaysStrong-OMK/releases/download/v1.0.5-omk-r6/AlwaysStrong-v1.0.5-omk-r6.zip",
-    "sha256": "e7d61b41c97c2be5fc2c7477609f845e756d0e0c4806622aec8a4b4e090d1b34",
-    "size": 15391969,
-    "signature": "vPevnlV0MVlbuYkF9wJogR7WqWbwiDKj7Lc7uUOofT3ijsgyClnnA10mIO0RSjK6APNBKIbxIFxIHXlu4cFZBg==",
-    "version": "v1.0.5-omk-r6",
-    "version_code": 10506
+    "url": "https://github.com/qianxiaoaa/AlwaysStrong-OMK/releases/download/v1.0.5-omk-r7/AlwaysStrong-v1.0.5-omk-r7.zip",
+    "sha256": "08d1659fcedc874ec664a55e2307ba781e941b66f77e04dadb93e32152b51021",
+    "size": 15494722,
+    "signature": "sbiZpRFBSTbiEM1IMnyKPIwd4kk90D7LXzoRR7xvgUdrJXk27EyPUd03nbR6GxmiDiYj/qERjKExRousjeKXAQ==",
+    "version": "v1.0.5-omk-r7",
+    "version_code": 10507
   }
 }
