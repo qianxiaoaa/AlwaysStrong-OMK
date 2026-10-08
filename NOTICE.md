@@ -71,69 +71,19 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
   （`libs/arm64-v8a/{keymint,inject,soterta-svc}`、`injector.toml`、`soterta.sh`），
   不使用 OMK 自带的 zygisk / `webroot/` / `daemon/`。
 - 新增可选的 Qualcomm Soter 中继看护 `soterta.sh`（默认关闭）。
-- keybox 默认来源改为 `ZeyolZZZ/TEESimulator-RS-fix`；PIF 指纹档案来源改为
-  `Elcapitanoe/PIF-Config-Generator`；模块健康状态改为本地推导，移除对第三方状态镜像的依赖。
+- keybox 默认来源改为 `ZeyolZZZ/TEESimulator-RS-fix`；模块健康状态改为本地推导，移除对第三方状态镜像的依赖。
 
-### r2 追加修改（修改日期：2026-10-08）
+### v1.0.5-omk-r1 修改（修改日期：2026-10-08）
 
-- keybox 采集移植 **yypm**（`php-server/lib/sources.php`、`config.php` 的多源配置、
-  `lib/revocation.php` 的镜像顺序），改写为设备端 `module/keybox_sources.sh`：
-  源列表、`base64` / `multi_base64_hex_rot13` / `hex_base64` 解码、GitHub 目录轮换取样、
-  优先级 + 吊销择优逻辑均源自 yypm，按 POSIX sh 与 Magisk/KSU 环境重写。
-- 吊销名单增加 `purainity` / `KimmyXYC` 镜像，保留 Google 官方兜底；`status_fetch.sh`
-  同步。修复 `keybox_revoke_check.sh`：官方名单以序列号**十进制**为键，旧的十六进制匹配
-  在真实名单上永远判不出吊销。
-- 说明：yypm 上游仓库**未声明许可证**。本仓库对其逻辑的移植仅作功能复用并在此标注来源，
-  著作权归原仓库作者；若原作者有异议，可移除相应实现。
-
-### r4 追加修改（修改日期：2026-10-08）
-
-- 新增签名式自更新分发，设计参考 **yypm**（其 PHP 服务端 `update.php` +
-  `lib/sign.php` 的 Ed25519 签名清单、`verify_tool.go` 的端侧验签、`.github/workflows/mirror.yml`
-  的镜像发布思路），改为**纯 GitHub Actions** 实现（本仓库无自建服务端）：
-  - `native/verifier/src/verify_tool.go`：端侧 Ed25519 验签工具（独立实现，非复制）。
-  - `scripts/build-verifier.sh`：交叉编译 4 个 ABI。
-  - `scripts/gen-manifest.py`：生成签名清单 `manifest.json`。
-  - `scripts/publish-manifest.sh` + `.github/workflows/manifest.yml`：发布清单到 release
-    资产与 `mirror-data` 分支（`mirror/manifest.json`）。
-  - `module/self_update.sh`：设备端拉取 / 校验 / 安装。
-- 信任根：Ed25519 公钥随包分发（`module/pubkey.b64` + `pubkey.fp`），私钥仅存于仓库
-  Actions Secret `ALWAYSSTRONG_SIGNING_KEY`，不进入仓库。
-- 说明：同上，yypm 无许可证声明；此处为独立实现 + 思路借鉴，并标注来源。
-
-### r5 追加修改（修改日期：2026-10-08）
-
-- 新增**签名式组件分发**（"带签名的应用商店"），设计参考 **yypm**（服务端
-  `lib/packages.php` / `fetch_packages.php` / `package/sources.json` 的组件注册与
-  上游 release 抓取、`update.php::build_package_manifest` 的逐包签名、客户端
-  `common.sh` 的 `check_updates` / `download_packages` / `auto_install_packages` /
-  `install_all_packages` 流程），改为**纯 GitHub Actions** 实现（无自建服务端）：
-  - `packages/sources.json`：组件注册表（移植 yypm 的 `sources.json` 结构）。
-  - `scripts/gen-packages.py`：解析上游 release + 逐包 Ed25519 签名 + 生成索引与分离签名。
-  - `scripts/publish-packages.sh` + `.github/workflows/packages.yml`：发布到 `mirror-data`。
-  - `module/components.sh`：端侧验签、下载、安装（ksud/magisk 或 pm install）。
-- 说明：yypm 无许可证声明；本处为独立实现 + 思路借鉴，并按 POSIX sh 重写，标注来源。
-
-### r7 追加修改（修改日期：2026-10-08）
-
-- **整套移植上游 yypm 的 WebUI 与后端**（此前 r2–r5 只借鉴其设计、自行重写；r7 改为直接
-  移植其脚本与界面，并全部**改指向本项目**）：
-  - 随包分发 `module/common.sh`（yypm 后端核心）、`module/webui.sh`（WebUI 命令入口）、
-    `module/yypm_service.sh`（yypm 主服务循环，重命名避免与本模块 `service.sh` 冲突）、
-    `module/webroot/index.html`（yypm 界面，文案/主题重命名为 AlwaysStrong）、
-    `module/appinfo.dex` + `appinfo.sha256`、`module/detect_risk_apps.txt`、
-    `module/detect_trace_paths.txt`。
-  - 数据/路径重定向：`/data/adb/yypm` → `/data/adb/tricky_store/yypm`，
-    `/data/adb/modules/yypm` → `/data/adb/modules/tricky_store`。
-  - 双信任根：本项目密钥（`module/pubkey.b64`）用于组件/自更新/本项目镜像；
-    上游 yypm 密钥（`module/pubkey.yypm.b64`）仅用于其 mirror/manifest 的 keybox 兜底。
-  - keybox 写入 `/data/adb/tricky_store/keybox.xml` 后经 `omk-sync.sh` 热同步进 OhMyKeymint
-    运行时；组件自动安装默认关闭（WebUI 可开）。
-- 说明：yypm 上游仓库**未声明许可证**。r7 直接移植其脚本文本，属对上游代码的复用，
-  保留原始版权与来源标注；如上游作者有异议，请在仓库 issue 中提出。
+- 撤回三改/yypm 的 WebUI 与组件商店移植：WebUI 恢复为 OMK 原版，组件分发与签名式自更新移除。
+- 保留并重新并入 yypm 的**多源 keybox 采集**：`module/keybox_sources.sh` 移植自
+  `yangyang8002/yypm` 的 `php-server/lib/sources.php`、`php-server/lib/config.php` 与
+  `php-server/lib/revocation.php`（源优先级、`keybox_pin`、GitHub 加速/镜像与吊销名单逻辑）。
+  上游仓库未附 LICENSE 文件，此处按「未声明」标注，仅作来源归属说明。
+- 指纹来源从 `Elcapitanoe/PIF-Config-Generator` 换回上游原生抓取
+  （`flash.android.com` + `content-flashstation-pa.googleapis.com`）。
 
 上游文件的完整源码见各自仓库；本仓库中未修改的上游脚本保留其原始版权头。
-
 
 ---
 

@@ -1,6 +1,6 @@
 # AlwaysStrong-OMK
 
-## 状态：恢复维护（2026-10-08，r11）
+## 状态：恢复维护（2026-10-08，v1.0.5-omk-r1）
 
 r10 之前一度停维，原因是当时公开镜像分发的 keybox 被**大规模吊销**，"刷进去就能拿到 STRONG"
 这个前提不成立。r11 起恢复维护：默认 keybox 与指纹来源都换成了新的上游，健康状态判定也完全搬到
@@ -14,12 +14,12 @@ r10 之前一度停维，原因是当时公开镜像分发的 keybox 被**大规
   `T=TEE`、`Verified`、`deviceLocked: true`、序列号不在名单里。原因是测试机刷的是自定义 ROM，
   它的 `vbmeta` 根本没有认证块，引擎如实上报的引导状态对应不到任何已认证构建。
 
-r2 的改动见 [CHANGELOG.md](CHANGELOG.md)：keybox 采集改为**多源池**（移植 yypm 的
-`sources.php` —— yurikey / integritybox / megatron 优先，keyboxhub / keyboxstatus 目录轮换兜底，
-按优先级 + 吊销过滤择优），指纹来自
-[Elcapitanoe/PIF-Config-Generator](https://github.com/Elcapitanoe/PIF-Config-Generator) 的稳定
-Pixel 档案，健康状态由模块本地推导（结构 + 引擎存活 + Google 吊销名单）。
-r10 的 `vb_hash` / `vb_key` 钉值通道**在真机上仍未验证过**。
+r11 的改动见 [CHANGELOG.md](CHANGELOG.md)：健康状态由模块本地推导（结构 + 引擎存活 +
+Google 吊销名单）。`v1.0.5-omk-r1` 重新起版：撤回 yypm 的 WebUI 与组件商店移植，WebUI 恢复为
+OMK 原版，指纹来源换回上游原生抓取（flash.android.com + content-flashstation-pa.googleapis.com），
+同时保留 yypm 的**多源 keybox 分发**（yurikey / integritybox / megatron 优先，keyboxhub /
+keyboxstatus 目录轮换兜底，移植为 `module/keybox_sources.sh`）。r10 的 `vb_hash` / `vb_key`
+钉值通道**在真机上仍未验证过**。
 
 ---
 
@@ -53,17 +53,12 @@ r10 的 `vb_hash` / `vb_key` 钉值通道**在真机上仍未验证过**。
 | 早期初始化 | 无 | `omk-early.sh`（post-fs-data 阶段） |
 | 配置桥接 | 无 | `omk-sync.sh`（镜像到 `/data/adb/tricky_store`） |
 | keybox 来源 | 无 | 多源池：yurikey / integritybox / megatron + keyboxhub / keyboxstatus（移植自 yypm） |
-| PIF 指纹档案 | 上游 autopif | Elcapitanoe 的 PIF-Config-Generator 稳定档案 |
+| PIF 指纹档案 | 上游 autopif | 模块内原生抓取：flash.android.com + content-flashstation |
 | 健康状态 | 无 | 本地推导：结构 + 引擎存活 + Google 吊销名单 |
 | Qualcomm Soter | 无 | 可选中继，默认关闭 |
 | Play Integrity | PlayIntegrityFork v18 | PlayIntegrityFork v18（不变） |
 | 指纹自动刷新 | asfetch + aswatcher | 不变 |
-| WebUI / Action | 有 | 整套改用 yypm 的界面 + 后端（环境对抗 / 检测整改 / 组件商店），改指向本项目 |
-
-> **三改（r7）**：WebUI 与后端整套移植自 [yangyang8002/yypm](https://github.com/yangyang8002/yypm)
-> 并改指向本项目 —— keybox 走「本项目镜像优先、上游 yypm 兜底」，组件分发与模块自更新指向本仓库；
-> 双信任根（本模块密钥为主，上游 yypm 密钥仅作其 manifest 的 keybox 兜底）；keybox 写入后经
-> `omk-sync.sh` 热同步进 OhMyKeymint 运行时；组件自动安装默认关闭，可在 WebUI「更新」页开启。
+| WebUI / Action | 有 | 不变 |
 
 ### 本次二改新增的修复
 
@@ -102,7 +97,7 @@ r10 的 `vb_hash` / `vb_key` 钉值通道**在真机上仍未验证过**。
 | OhMyKeymint | `1.3.5-196-10113e7` | [ITxiao6666/OhMyKeymint](https://github.com/ITxiao6666/OhMyKeymint) |
 | PlayIntegrityFork | `v18` | [osm0sis/PlayIntegrityFork](https://github.com/osm0sis/PlayIntegrityFork) |
 | keybox | 多源池（yurikey / integritybox / megatron + keyboxhub / keyboxstatus） | [yangyang8002/yypm](https://github.com/yangyang8002/yypm) 的 `php-server/lib/sources.php` |
-| PIF 指纹档案 | 最新稳定 Pixel 档案 | [Elcapitanoe/PIF-Config-Generator](https://github.com/Elcapitanoe/PIF-Config-Generator) |
+| PIF 指纹档案 | Pixel Canary 原生抓取 | flash.android.com + content-flashstation-pa.googleapis.com |
 | AlwaysStrong 骨架 | `v1.0.4` | [evoker0/AlwaysStrong](https://github.com/evoker0/AlwaysStrong) |
 | asfetch / aswatcher | 随 AlwaysStrong v1.0.4 | 同上 |
 
@@ -185,41 +180,6 @@ sh /data/adb/modules/tricky_store/collect_logs.sh
 
 ---
 
-## 自更新（签名分发）
-
-模块内置端侧 Ed25519 验签工具，配合 GitHub Actions 生成的**签名清单**实现自更新：
-
-- 设备端 `module/self_update.sh` 从 `mirror-data` 分支（raw + jsDelivr 镜像）拉取
-  `mirror/manifest.json`，仅当清单 `versionCode` 高于本地时才下载 release zip，
-  校验 sha256 + Ed25519 签名（公钥 `module/pubkey.b64`）后交给 root 管理器安装。
-- 清单由 `.github/workflows/manifest.yml`（以及「Upstream release」工作流的内联步骤）
-  生成：对 release 的 zip 用仓库 Secret `ALWAYSSTRONG_SIGNING_KEY`（Ed25519 私钥，
-  base64 的 PKCS8 PEM）签名，产出 `manifest.json`，同时挂到 release 资产与 `mirror-data` 分支。
-- 自动检查每 24 小时一次（在 `service.sh` 的小时循环内节流）；关闭：
-  `touch /data/adb/tricky_store/no_auto_update`。也可在 WebUI 点「更新」，或执行
-  `sh $MODPATH/action.sh update` 手动更新。
-- 私钥只存在于 Actions Secret，仓库内仅公钥；私钥丢失需重签并重新分发公钥。
-
----
-
-## 组件分发（签名应用商店）
-
-在自更新之外，还能分发第三方组件（Zygisk-Next / HMA-OSS / FuseFixer 等）：
-
-- 注册表 `packages/sources.json` 声明组件与上游仓库/资产匹配规则；`scripts/gen-packages.py`
-  解析最新 release、计算 sha256、读取 zip 内 module.prop 版本，并用同一把 Ed25519 私钥
-  对每个包签名，产出索引 `mirror/packages.json` + 分离签名 `mirror/packages.json.sig`。
-- `.github/workflows/packages.yml`（每日定时 + 手动触发）经 `scripts/publish-packages.sh`
-  把索引提交到 `mirror-data` 分支。
-- 设备端 `module/components.sh`：先验签整份索引，再逐项下载并校验 sha256 + Ed25519；
-  模块用 ksud / magisk 安装（重启生效），APK 用 `pm install -r`（即时生效）。
-- **默认不自动安装**：`touch /data/adb/tricky_store/components_auto` 才允许自动安装
-  `x-auto=1` 的组件；安装 APK 另需 `touch .../components_allow_apk`；`no_components`
-  可整体关闭。手动：`sh $MODPATH/action.sh components {list|check|update|install <name>}`，
-  或 WebUI 的「组件」按钮。
-
----
-
 ## 目录结构
 
 ```
@@ -233,17 +193,13 @@ module/                模块本体（AlwaysStrong v1.0.4 骨架 + OMK 适配脚
   ├── keybox_sources.sh  多源采集（yypm 移植）：base64 / hex / 10 轮嵌套解码 + 目录轮换
   ├── keybox_check.sh  keybox 结构校验（接受 dual / RSA-only / EC-only）
   ├── keybox_revoke_check.sh  对缓存的 Google 吊销名单比对序列号
-  ├── pif_native_fetch.sh  从 PIF-Config-Generator 取最新稳定 Pixel 档案
+  ├── pif_native_fetch.sh  Pixel Canary 指纹原生抓取（flash.android.com + content-flashstation）
   ├── status_fetch.sh  本地推导健康状态（结构 + 引擎存活 + 吊销名单）
-  ├── self_update.sh   签名式自更新：拉清单 → 验签 → 交 root 管理器安装
-  ├── components.sh    签名式组件分发：验签索引 → 下载校验 → 安装（模块/APK）
-  ├── pubkey.b64       Ed25519 公钥（自更新信任根）
   ├── soterta.sh       Qualcomm Soter 中继看护（可选，默认关闭）
   ├── engine.sh        PlayIntegrityFork 适配层
   ├── service.sh       服务启动 / 监控 / 注入兜底
-  └── webroot/         WebUI（index.html + donate.png 赞赏码）
-native/                asfetch / aswatcher / verifier 源码与预编译产物
-scripts/               构建、清单生成 / 发布、版本升级等脚本
+  └── webroot/         WebUI
+native/                asfetch / aswatcher 源码与预编译产物
 docs/ADVANCED.md       进阶说明与排障
 build.sh               构建脚本
 ```
@@ -271,5 +227,4 @@ GPL-3.0 与 AGPL-3.0 兼容（AGPL §13），因此合并分发时整体适用 A
 - [qwq233/OhMyKeymint](https://github.com/qwq233/OhMyKeymint) — 证明引擎
 - [evoker0/AlwaysStrong](https://github.com/evoker0/AlwaysStrong) — 模块骨架、原生指纹抓取、WebUI
 - [osm0sis/PlayIntegrityFork](https://github.com/osm0sis/PlayIntegrityFork) — Play Integrity 修复
-- [yangyang8002/yypm](https://github.com/yangyang8002/yypm) — keybox 多源池与签名分发设计来源
 - 以及 AlwaysStrong 上游致谢中列出的 JingMatrix、Enginex0、KOWX712 等

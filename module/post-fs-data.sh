@@ -69,15 +69,6 @@ fi
 # pins ro.build.version.security_patch to match the spoofed fingerprint.
 [ -f "$MODPATH/sync_patch.sh" ] && sh "$MODPATH/sync_patch.sh" boot 2>/dev/null
 
-# --- First-boot original-file backup (specter first_boot_setup, backup half) --
-# Snapshot the pre-module keystore config once, before anything downstream
-# rewrites it. Runs after .rom_security_patch is recorded above (that file is
-# part of the snapshot) and after sync_patch so security_patch.txt exists to be
-# captured. Toggle: yypm config first_boot_backup (default on).
-if [ -x "$MODPATH/first_boot_backup.sh" ]; then
-    MODPATH="$MODPATH" sh "$MODPATH/first_boot_backup.sh" >/dev/null 2>&1
-fi
-
 # --- Bootloader / verified boot props (required for STRONG, harmless if already correct) ---
 
 # Samsung

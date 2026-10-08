@@ -4,10 +4,6 @@ out/
 *.zip
 *.bak
 
-# python caches
-__pycache__/
-*.pyc
-
 # Rust / cargo-ndk per-target build cache (the actual ABI binaries we ship
 # live in native/*/prebuilt/ and ARE committed)
 native/**/target/

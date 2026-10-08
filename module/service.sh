@@ -230,35 +230,6 @@ fi
     fi
 } &
 
-# --- Specter-derived feature actions (opt-in) -----------------------------
-# Ported from dpejoh/specter: ADB disabler, Zygisk Next config, Widevine L1 and
-# GMS/DroidGuard kill. Every script self-gates on its yypm config key, so with
-# the shipped defaults (all OFF) this block is a no-op and changes nothing about
-# the default boot. The user flips them from the WebUI 环境对抗 page.
-#   adb_disabler    -> adb_disabler=on
-#   zygisk_next     -> zygisk_next_cfg=on
-#   widevine        -> widevine_l1=on
-#   gms_kill        -> gms_force_stop=on / gms_clear_data=on
-# (first_boot_backup runs earlier, in post-fs-data.sh.)
-{
-    # settings/pm/am require the framework up; wait for boot then settle.
-    i=0
-    while [ "$(getprop sys.boot_completed)" != "1" ] && [ "$i" -lt 60 ]; do sleep 3; i=$((i+1)); done
-    sleep 5
-    [ -x "$MODDIR/adb_disabler.sh" ] && sh "$MODDIR/adb_disabler.sh" 2>&1 | log -t "AlwaysStrong-adb"
-    [ -x "$MODDIR/zygisk_next.sh" ]  && sh "$MODDIR/zygisk_next.sh"  2>&1 | log -t "AlwaysStrong-zyn"
-    [ -x "$MODDIR/widevine.sh" ]     && sh "$MODDIR/widevine.sh"     2>&1 | log -t "AlwaysStrong-widevine"
-    [ -x "$MODDIR/gms_kill.sh" ]     && sh "$MODDIR/gms_kill.sh"     2>&1 | log -t "AlwaysStrong-gms"
-} &
-
-# --- Opt-in periodic scheduler (specter scheduler) ------------------------
-# Off unless scheduler_enable=on; then it runs the indicator / target / autopif
-# tasks on their own intervals. It never fetches the keybox (the yypm backend
-# owns that), so it cannot double-write keybox.xml.
-if [ -x "$MODDIR/scheduler.sh" ]; then
-    { sh "$MODDIR/scheduler.sh" 2>&1 | log -t "AlwaysStrong-sched"; } &
-fi
-
 # ro.boot.vbmeta.digest is deliberately left as the kernel set it. An AVB digest
 # is hashed over the vbmeta struct, so hashing the partition instead yields a
 # plausible-looking value that matches no certified build -- worse than an empty
@@ -310,12 +281,11 @@ fi
 # loop's job.
 #
 # It runs the real action.sh, the exact same path a manual press takes: build
-# the target list, fetch the fingerprint with all three sources (the
-# PIF-Config-Generator feed, upstream's own fetcher, then the shipped local
-# props as a guaranteed fallback),
+# the target list, fetch the fingerprint with all three sources (native crawl,
+# upstream fetcher, then the shipped local props as a guaranteed fallback),
 # enforce the STRONG spoof flags, sync the security patch, and restart PI. The
 # old inline copy here skipped the target-list build and the local fingerprint
-# fallback, so on a first boot where the network fetch wasn't ready yet it left
+# fallback, so on a first boot where the network crawl wasn't ready yet it left
 # no usable fingerprint and the device sat at BASIC until a manual press —
 # which is exactly the "first-boot Action doesn't happen" bug. Calling action.sh
 # means there is only one copy of that logic and no weaker duplicate to drift.
@@ -414,15 +384,16 @@ fi
             # resetting (spoofVendingFinger 1 -> 0). No-op with no PIF present.
             sh "$MODDIR/lite_pif_sync.sh" 2>&1 | log -t "AlwaysStrong-hourly"
         fi
-        # keybox / 自更新 / 组件分发现在由 yypm 后端统一负责（见 yypm_service.sh +
-        # webui.sh）：keybox 走「本项目镜像优先、上游 yypm 兜底」，组件读本项目的
-        # packages.json。这里不再重复拉取，避免两个写入者同时改 keybox.xml / 重复装组件。
-        # 只保留把最新配置镜像进 OMK 运行时的那一步（下方 attest_sync）。
-        # Signed module self-update + signed component auto-install are now owned
-        # by the yypm backend (common.sh install_all_packages / check_module_update,
-        # driven by yypm_service.sh). Our legacy self_update.sh / components.sh
-        # remain packaged for manual/diagnostic use but are not run on a timer here,
-        # so there is exactly one automatic writer per artifact.
+        if [ ! -f "$CFG/custom_keybox" ] && [ ! -f "$CFG/no_auto_keybox" ] && [ -x "$MODDIR/keybox_fetch.sh" ]; then
+            kbout=$(sh "$MODDIR/keybox_fetch.sh" 2>&1)
+            kbrc=$?
+            [ -n "$kbout" ] && echo "$kbout" | log -t "AlwaysStrong-hourly"
+            if [ "$kbrc" = "0" ]; then
+                log -t "AlwaysStrong-hourly" "keybox updated, restarting PI"
+                killall -9 com.google.android.gms.unstable 2>/dev/null
+                killall -9 com.android.vending 2>/dev/null
+            fi
+        fi
         # Mirror whatever the pass above changed (keybox, target list, patch
         # level) into the attestation engine's own runtime dir. No-op when
         # nothing moved, so it never bounces the engine for free.
@@ -433,13 +404,3 @@ fi
         fi
     done
 }&
-
-# --- yypm 后端主循环（本项目移植版）-------------------------------------
-# keybox 获取 / 组件分发 / 模块自更新 / 环境对抗（隐藏 BL、关调试、HMA、
-# SUSFS、反挂等）都由 yypm 的 common.sh + webui.sh 体系承担，入口是
-# yypm_service.sh。它自带 while 循环，检查间隔读 config.prop 的
-# check_interval（WebUI「更新」页可改），与上面的 hourly 循环互相独立。
-# 反挂锁定 / 仅 WiFi / 自动获取开关均由它内部自判，这里只负责拉起。
-if [ -x "$MODDIR/yypm_service.sh" ]; then
-    { sh "$MODDIR/yypm_service.sh" 2>&1 | log -t "AlwaysStrong-yypm"; } &
-fi

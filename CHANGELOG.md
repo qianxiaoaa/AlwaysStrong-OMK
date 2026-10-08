@@ -1,90 +1,33 @@
 # Changelog
 
-本仓库是在 [AlwaysStrong-OMK](https://github.com/UtMostUR/AlwaysStrong-OMK)（二改）基础上的**三改**版本，三改作者为 **浅笑呐**（Telegram：https://t.me/AlwaysStrongR ）。版本号沿用上游 AlwaysStrong 的 `v1.0.x` 并加 `-omk-rN` 后缀。
-
-## v1.0.5-omk-r7
-
-- 把上游 **yypm**（yangyang8002/yypm）整套 WebUI + 后端移植进本模块，并全部改指向本项目：
-  - 后端 `common.sh` + `webui.sh` + `yypm_service.sh` 随包分发；keybox 走「本项目镜像优先、上游 yypm 兜底」，组件分发与模块自更新改指向本项目 `qianxiaoaa/AlwaysStrong-OMK`。
-  - WebUI 换成 yypm 的界面（含环境对抗页：隐藏 BL、关调试、HMA-OSS 自动配置、SUSFS 加固、反挂检查、检测整改等），文案与主题均重命名为 AlwaysStrong。
-  - 双信任根：本项目密钥（组件/自更新/本项目镜像）为主，上游 yypm 密钥仅用于其 mirror/manifest 的 keybox 兜底。
-  - 组件自动安装默认**关闭**（沿用本模块「需显式开启」约定），WebUI「附属模块更新」新增开关；手动「一键安装」不受该开关限制。
-  - keybox 写入 `/data/adb/tricky_store/keybox.xml` 后热同步进 OhMyKeymint 运行时（`omk-sync.sh`），拉取后即时生效。
-  - 运行状态隔离在 `/data/adb/tricky_store/yypm/`，模块 id / 数据目录仍为 `tricky_store`。
-- 定时任务改由 yypm 后端主循环统一负责 keybox / 组件 / 自更新，`service.sh` 原 hourly 循环不再重复拉取（避免双写入者）。
-
-**Bundled in every build of this release**
-- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
-- Play Integrity: PlayIntegrityFork `v18`
-
-## v1.0.5-omk-r6
-
-- 新增**赞赏码**：CHANGELOG 底部展示微信赞赏码，仓库与模块随包内置 `webroot/donate.png`。
-- WebUI「捐赠」按钮改为离线保存内置赞赏码到 `/sdcard/Download/AlwaysStrong-donate.png`，并提示打开微信扫一扫（从相册选图）完成赞赏；不再跳转外部链接。
-
-**Bundled in every build of this release**
-- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
-- Play Integrity: PlayIntegrityFork `v18`
-
-## v1.0.5-omk-r5
-
-- 新增**签名式组件分发**（Phase 3，参考 yypm 的组件应用商店设计，改为纯 GitHub Actions 实现）：
-- 注册表 `packages/sources.json` 声明组件（Zygisk-Next / HMA-OSS / FuseFixer）；`scripts/gen-packages.py` 解析上游 release、计算 sha256、读取 zip 内 module.prop 版本、Ed25519 签名，产出 `mirror/packages.json` + 分离签名 `.sig`。
-- 发布链路：`scripts/publish-packages.sh` + `.github/workflows/packages.yml`（每日定时 + 手动），把 `mirror/packages.json(.sig)` 提交到 `mirror-data` 分支。
-- 设备端 `module/components.sh`：验签索引 → 列/查/装；每个组件下载后再校验 sha256 + Ed25519；模块走 ksud/magisk 安装，APK 走 pm install -r。
-- 默认关闭自动安装：开启 auto 需 `touch $CONFIG_DIR/components_auto`，安装 APK 需 `components_allow_apk`；`no_components` 可整体关闭。`action.sh components` 手动操作，WebUI 新增「组件」按钮。
-
-**Bundled in every build of this release**
-- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
-- Play Integrity: PlayIntegrityFork `v18`
-
-## v1.0.5-omk-r4
-
-- 新增**签名式自更新**（Phase 2，参考 yypm 的 Ed25519 清单/验签设计，改为纯 GitHub Actions 实现）：
-  - 端侧验签工具 `verify_tool`（Go，随包 4 个 ABI），信任根为随包分发的 Ed25519 公钥 `module/pubkey.b64` / `pubkey.fp`。
-  - `scripts/gen-manifest.py` 生成签名清单；`.github/workflows/manifest.yml` 对 release zip 签名，产出 `manifest.json` 并发布到 release 资产与 `mirror-data` 分支。
-  - `module/self_update.sh`：拉取镜像清单 → 比对 versionCode → 下载 → sha256 + Ed25519 验签 → 交 root 管理器安装。
-  - 自动检查每 24 小时一次（`service.sh` 内节流，`no_auto_update` 可关）；WebUI 新增「更新」按钮，支持 `action.sh update`。
-  - 私钥仅存于仓库 Secret `ALWAYSSTRONG_SIGNING_KEY`，不进仓库。
-
-**Bundled in every build of this release**
-- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
-- Play Integrity: PlayIntegrityFork `v18`
-
-## v1.0.5-omk-r3
-
-- 修复 `keybox_fetch.sh` 调用 `keybox_sources.sh` 时未传递 `CONFIG_DIR` / `KEYBOX_ACCEL` / `KEYBOX_STATUS_URL` 的问题：子进程不继承仅赋值、未导出的 shell 变量，导致这三项覆盖对多源池不生效。
-
-**Bundled in every build of this release**
-- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
-- Play Integrity: PlayIntegrityFork `v18`
-
-## v1.0.5-omk-r2
-
-- keybox 采集改为多源池：移植 yypm 的 `php-server/lib/sources.php`，新增 `module/keybox_sources.sh`，按优先级拉取 yurikey（base64）、integritybox / megatron（10 轮 base64→hex→rot13），并轮换 keyboxhub / keyboxstatus 集合仓库目录，逐个校验结构 + 吊销后择优；`KEYBOX_URL` / `KEYBOX_BASE_URL` 单源覆盖保留，原 ZeyolZZZ 单镜像降级为最后兜底。
-- 吊销名单改为多镜像（purainity / KimmyXYC 优先，Google 官方兜底），`status_fetch.sh` 同步。
-- 修复吊销比对：官方名单以序列号**十进制**为键，旧逻辑按十六进制匹配，真实名单永远判不出吊销；现同时支持十进制与十六进制键。
-
-**Bundled in every build of this release**
-- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
-- Play Integrity: PlayIntegrityFork `v18`
-
-## v1.0.5-omk-r1 — 2026-10-08
-
-**三改首版。** 本仓库自此由 **浅笑呐** 以「三改」身份继续维护，Telegram 交流与公告统一走
-https://t.me/AlwaysStrongR 。引擎与外部来源承接 r11，本版只做身份与自动化调整：
-
-- `module.prop`：版本改为 `v1.0.5-omk-r1`（`versionCode=10501`）；作者名单加入三改作者 **浅笑呐**；
-  `support` 指向 https://t.me/AlwaysStrongR 。
-- 全仓库的 `https://t.me/` 链接统一替换为 https://t.me/AlwaysStrongR 。
-- 新增 `.github/workflows/upstream-release.yml` + `scripts/check-payload-upstream.sh` +
-  `scripts/bump-r.sh`：北京时间每天 02:00（UTC 18:00）自动检查上游 **OhMyKeymint** 与
-  **PlayIntegrityFork** 的 release；有新版本时更新 `build.sh` 钉值、递增 `-omk-rN`、
-  重新构建并在本仓库自动创建 Release。
+本仓库为第三方三改版本，在上游 AlwaysStrong-OMK（二改）基础上继续维护；版本号沿用上游 AlwaysStrong 的 `v1.0.x` 并加 `-omk-rN` 后缀。自 `v1.0.5-omk-r1` 起重新起版，下方保留二改的 `v1.0.4-omk-r*` 历史。
 
 > **历史停维说明（2026-09-30）：公开镜像的 keybox 大规模被吊销，本仓库一度暂停维护。**
 > 自 r11 起恢复维护：条件材料改由新的上游来源提供，不再依赖那个已被吊销的镜像。
 > 下面 r9 / r10 两段保留作记录，其中 r10 的 `vb_hash` / `vb_key` 钉值通道**未经真机验证**。
+
+## v1.0.5-omk-r1 — 2026-10-08
+
+三改重新起版：撤回 yypm 的 WebUI 与组件商店移植，同时保留其多源 keybox 分发。
+
+### 变更
+
+- **WebUI 恢复为 OMK 原版**：撤回 yypm 界面的整套移植，`module/webroot/index.html` 换回 OMK 自带界面，
+  其后端（`engine.sh` / `attest.sh` / `status_fetch.sh` 等）一并恢复。
+- **移除组件商店及相关分发**：删除 yypm 组件（Zygisk-Next / HMA-OSS / FuseFixer）、组件注册表
+  `packages/sources.json`、`scripts/gen-packages.py`，以及签名式自更新（`self_update.sh` +
+  `native/verifier`）。
+- **保留 yypm 多源 keybox 分发**：`module/keybox_sources.sh`（移植 yypm `php-server/lib/sources.php`）
+  继续随包分发——yurikey / integritybox / megatron 优先，keyboxhub / keyboxstatus 目录轮换兜底，
+  按优先级 + 吊销过滤择优；`keybox_fetch.sh` 走该池，`keybox_revoke_check.sh` / `status_fetch.sh`
+  使用多镜像吊销名单（purainity / KimmyXYC 优先，Google 官方兜底）。
+- **指纹来源换回上游原生抓取**：由 `Elcapitanoe/PIF-Config-Generator` 的 release feed 撤回为
+  `flash.android.com` + `content-flashstation-pa.googleapis.com` 的原生抓取（即 r10 行为）。
+- 保留 r11 的证明引擎 **OhMyKeymint 1.3.5-196-10113e7**、可选 Soter 中继与本地推导健康状态。
+
+**Bundled in every build of this release**
+- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
+- Play Integrity: PlayIntegrityFork `v18`
 
 ## v1.0.4-omk-r11 — 2026-10-08
 
@@ -610,9 +553,3 @@ r6 的 pin 已经让 KeyMint 实例选择稳定下来（`level-zero KM strategy`
 - 不能与独立 OhMyKeymint 模块同时安装。
 - 从其他 OMK 引擎切换过来的**首次开机**，旧密钥 blob 可能无法解密，
   自愈逻辑会重建私有存储；此时旧应用密钥失效属预期行为。
-
----
-
-创作不易，感谢支持。
-
-![创作不易，感谢支持。](module/webroot/donate.png)

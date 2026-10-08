@@ -26,7 +26,7 @@ NAME=$(grep_prop name "${TMPDIR}/module.prop")
 install_file() { unzip -qqjo "$ZIPFILE" "$1" -d "$2" || abort "extract failed: $1"; }
 
 ui_print "${NAME:-AlwaysStrong} $VERSION"
-ui_print "三改 by 浅笑呐  -  t.me/AlwaysStrongR"
+ui_print "by @evokerr  -  t.me/keyboxstrong"
 ui_print ""
 
 # stop anything that might be holding our binaries (upgrade-in-place). The list
@@ -98,16 +98,9 @@ for f in module.prop service.sh post-fs-data.sh action.sh \
          build_target_txt.sh status_fetch.sh description.txt \
          rom_spoof_block.sh conflict_scan.sh sync_patch.sh \
          pif_native_fetch.sh prop_unify.sh logcat_cleanup.sh collect_logs.sh \
-         import_pif.sh reapply_spoof.sh lite_pif_sync.sh self_update.sh \
-         components.sh \
-         common.sh webui.sh yypm_service.sh \
-         adb_disabler.sh gms_kill.sh widevine.sh zygisk_next.sh \
-         first_boot_backup.sh scheduler.sh \
-         appinfo.dex appinfo.sha256 \
-         detect_risk_apps.txt detect_trace_paths.txt \
-         pubkey.yypm.b64 pubkey.yypm.fp \
+         import_pif.sh reapply_spoof.sh lite_pif_sync.sh \
          pif_fallback_1.prop pif_fallback_2.prop \
-         target.txt pubkey.b64 pubkey.fp \
+         target.txt \
          $ENGINE_FILES ; do
   install_file "$f" "$MODPATH"
 done
@@ -192,12 +185,6 @@ if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "bin/$ABI_DIR/asfetch"; then
   chmod 755 "$MODPATH/bin/$ABI_DIR/asfetch"
 fi
 
-# --- verify_tool native Ed25519 verifier (self-update integrity)
-if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "bin/$ABI_DIR/verify_tool"; then
-  install_file "bin/$ABI_DIR/verify_tool" "$MODPATH/bin/$ABI_DIR"
-  chmod 755 "$MODPATH/bin/$ABI_DIR/verify_tool"
-fi
-
 chmod 755 "$MODPATH"/*.sh 2>/dev/null
 
 # --- WebUI (KSU / APatch / MMRL) — single self-contained index.html
@@ -205,12 +192,6 @@ mkdir -p "$MODPATH/webroot"
 if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "webroot/index.html"; then
   install_file "webroot/index.html" "$MODPATH/webroot"
   chmod 644 "$MODPATH/webroot/index.html"
-  # Donation QR (WeChat reward). Ships inert: the WebUI only copies it to the
-  # user's storage when they tap the Donate button.
-  if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "webroot/donate.png"; then
-    install_file "webroot/donate.png" "$MODPATH/webroot"
-    chmod 644 "$MODPATH/webroot/donate.png"
-  fi
   # Magisk has no built-in WebUI host. The standalone WebUI app is fetched
   # from GitHub and installed on the first [Action] press (see action.sh).
   if [ "$KSU" != true ] && [ "$APATCH" != true ]; then

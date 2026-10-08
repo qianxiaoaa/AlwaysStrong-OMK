@@ -26,20 +26,6 @@ if [ "$1" = "logs" ] && [ -x "$MODPATH/collect_logs.sh" ]; then
     exit 0
 fi
 
-# `action.sh update` — check for and install a signed module update, then exit.
-if [ "$1" = "update" ] && [ -x "$MODPATH/self_update.sh" ]; then
-    sh "$MODPATH/self_update.sh"
-    exit $?
-fi
-
-# `action.sh components [list|check|update|install NAME]` — signed component
-# distribution (Zygisk-Next / HMA-OSS / FuseFixer ...), then exit.
-if [ "$1" = "components" ] && [ -x "$MODPATH/components.sh" ]; then
-    shift
-    sh "$MODPATH/components.sh" "$@"
-    exit $?
-fi
-
 CONFIG_DIR=/data/adb/tricky_store
 LINE="========================="
 VER=$(grep -m1 '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2-)
@@ -225,10 +211,10 @@ esac
 sleep 1
 else
 # --- Step 3: Fingerprint ---
-# Three sources, tried in order: the PIF-Config-Generator feed, upstream's own
-# fetcher, then the two shipped static props. Each hands its result to the engine
-# adapter, so whichever lands ends up in the file this build's zygisk reads, with
-# that engine's STRONG flags applied. A failed primary shows once as "trying with
+# Three sources, tried in order: our native crawl, upstream's own fetcher, then
+# the two shipped static props. Each hands its result to the engine adapter, so
+# whichever lands ends up in the file this build's zygisk reads, with that
+# engine's STRONG flags applied. A failed primary shows once as "trying with
 # fallback".
 FP_OK=0
 FP_SRC=""
@@ -237,10 +223,11 @@ FP_SRC=""
 # knows where its own zygisk reads from and which spoof-flag names it wants.
 apply_pif() { engine_install_pif "$1"; }
 
-# 1. PIF-Config-Generator feed (PRIMARY) — the newest stable Pixel profile, one
-#    small JSON from GitHub, driven through asfetch. Gate on the EXIT CODE: it
-#    is 0 only when the engine accepted a fresh fingerprint — a stale file must
-#    not count as success.
+# 1. native crawl (PRIMARY) — the same Google servers upstream uses, driven
+#    through asfetch. The multi-page crawl runs ~20-25s on a cold network, so a
+#    tight bound just forces the fallback on every tap. Gate on the EXIT CODE:
+#    it is 0 only when the engine accepted a fresh fingerprint — a stale file
+#    must not count as success.
 row "🌐" "fetching fingerprint..."
 if [ -x "$MODPATH/pif_native_fetch.sh" ]; then
     bounded "$ENGINE_NATIVE_TIMEOUT" sh "$MODPATH/pif_native_fetch.sh" \
