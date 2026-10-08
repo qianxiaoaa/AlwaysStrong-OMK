@@ -395,6 +395,22 @@ fi
                 killall -9 com.android.vending 2>/dev/null
             fi
         fi
+        # Signed module self-update (once per day; opt out with no_auto_update).
+        # Fetches the signed manifest, and only when a newer versionCode is
+        # advertised does it download + verify + hand the zip to the manager.
+        # The stamp throttles the manifest GET to daily even though this loop is
+        # hourly; after the install lands it activates on the next reboot.
+        if [ ! -f "$CFG/no_auto_update" ] && [ -x "$MODDIR/self_update.sh" ]; then
+            _us="$CFG/.self_update.stamp"
+            _unow=$(date +%s 2>/dev/null)
+            case "$_unow" in ''|*[!0-9]*) _unow=0 ;; esac
+            _ulast=$(cat "$_us" 2>/dev/null)
+            case "$_ulast" in ''|*[!0-9]*) _ulast=0 ;; esac
+            if [ "$_unow" -gt 0 ] && [ $(( _unow - _ulast )) -ge 86400 ]; then
+                echo "$_unow" > "$_us" 2>/dev/null
+                sh "$MODDIR/self_update.sh" 2>&1 | log -t "AlwaysStrong-update"
+            fi
+        fi
         # Mirror whatever the pass above changed (keybox, target list, patch
         # level) into the attestation engine's own runtime dir. No-op when
         # nothing moved, so it never bounces the engine for free.

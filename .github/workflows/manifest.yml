@@ -1,0 +1,43 @@
+name: Signed manifest
+
+# Build the signed update manifest for a release and publish it:
+#   - attach manifest.json to the GitHub release
+#   - commit mirror/manifest.json to the `mirror-data` branch (raw + jsDelivr)
+#
+# The scheduled "Upstream release" workflow calls the same script inline, so a
+# normal auto-release is covered there. This workflow covers manually created
+# releases and re-publishing on demand.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to (re)publish a manifest for
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manifest-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish signed manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALWAYSSTRONG_SIGNING_KEY: ${{ secrets.ALWAYSSTRONG_SIGNING_KEY }}
+          MIRROR_REMOTE: origin
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          [ -n "$TAG" ] || { echo "::error::no tag to publish"; exit 1; }
+          bash scripts/publish-manifest.sh "$TAG" "${{ github.repository }}"

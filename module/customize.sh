@@ -98,9 +98,9 @@ for f in module.prop service.sh post-fs-data.sh action.sh \
          build_target_txt.sh status_fetch.sh description.txt \
          rom_spoof_block.sh conflict_scan.sh sync_patch.sh \
          pif_native_fetch.sh prop_unify.sh logcat_cleanup.sh collect_logs.sh \
-         import_pif.sh reapply_spoof.sh lite_pif_sync.sh \
+         import_pif.sh reapply_spoof.sh lite_pif_sync.sh self_update.sh \
          pif_fallback_1.prop pif_fallback_2.prop \
-         target.txt \
+         target.txt pubkey.b64 pubkey.fp \
          $ENGINE_FILES ; do
   install_file "$f" "$MODPATH"
 done
@@ -183,6 +183,12 @@ fi
 if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "bin/$ABI_DIR/asfetch"; then
   install_file "bin/$ABI_DIR/asfetch" "$MODPATH/bin/$ABI_DIR"
   chmod 755 "$MODPATH/bin/$ABI_DIR/asfetch"
+fi
+
+# --- verify_tool native Ed25519 verifier (self-update integrity)
+if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "bin/$ABI_DIR/verify_tool"; then
+  install_file "bin/$ABI_DIR/verify_tool" "$MODPATH/bin/$ABI_DIR"
+  chmod 755 "$MODPATH/bin/$ABI_DIR/verify_tool"
 fi
 
 chmod 755 "$MODPATH"/*.sh 2>/dev/null

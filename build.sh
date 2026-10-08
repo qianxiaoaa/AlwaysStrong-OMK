@@ -128,14 +128,16 @@ fi
 # crate directory is native/watcher, so the name is not enough to find it.
 native_src() {  # native_src <bin> <abi>
     case "$1" in
-        asfetch)   echo "$ROOT/native/asfetch/prebuilt/$2/asfetch" ;;
-        aswatcher) echo "$ROOT/native/watcher/prebuilt/$2/aswatcher" ;;
-        *)         echo "" ;;
+        asfetch)     echo "$ROOT/native/asfetch/prebuilt/$2/asfetch" ;;
+        aswatcher)   echo "$ROOT/native/watcher/prebuilt/$2/aswatcher" ;;
+        verify_tool) echo "$ROOT/native/verifier/prebuilt/$2/verify_tool" ;;
+        *)           echo "" ;;
     esac
 }
 
 for abi in $ABIS; do
-    for bin in asfetch aswatcher; do
+    for bin in asfetch aswatcher verify_tool;
+ do
         src="$(native_src "$bin" "$abi")"
         if [ -n "$src" ] && [ -f "$src" ]; then
             mkdir -p "$STAGE/bin/$abi"
@@ -147,10 +149,10 @@ done
 # The module only installs on arm64-v8a (see attest/omk.sh), so a missing
 # arm64-v8a helper means the native/ layout moved and the zip would silently
 # ship without the fingerprint crawler or the watcher.
-for bin in asfetch aswatcher; do
+for bin in asfetch aswatcher verify_tool; do
     [ -f "$STAGE/bin/$OMK_ABI/$bin" ] || die "native/$bin for $OMK_ABI was not staged — native/ layout changed"
 done
-ok "staged native helpers (asfetch, aswatcher)"
+ok "staged native helpers (asfetch, aswatcher, verify_tool)"
 
 # ---------- 2) OhMyKeymint payload ----------
 mkdir -p "$BUILD"
@@ -276,6 +278,7 @@ chmod 0755 "$STAGE/libs/$OMK_ABI/keymint" "$STAGE/libs/$OMK_ABI/inject" \
 for abi in $ABIS; do
     chmod 0755 "$STAGE/bin/$abi/asfetch"  2>/dev/null || true
     chmod 0755 "$STAGE/bin/$abi/aswatcher" 2>/dev/null || true
+    chmod 0755 "$STAGE/bin/$abi/verify_tool" 2>/dev/null || true
 done
 
 mkdir -p "$OUT"

@@ -48,3 +48,16 @@ This file records user instructions, preferences, and teachings for reference in
   - The release workflow `.github/workflows/upstream-release.yml` runs daily 02:00 Beijing (cron `0 18 * * *`) to re-pin OhMyKeymint/PlayIntegrityFork and bump `-omk-rN` automatically.
   - Every new `module/*.sh` must be named in `module/customize.sh`'s extraction list, or `build.sh`'s install-coverage check ("every staged script has an installer") fails the build.
   - `out/`, `build/`, `*.zip`, `*.bak` are gitignored; `.upstream-changes.txt` is a transient input to `bump-r.sh`, not committed.
+
+[Project Knowledge Summary]
+- Date: 2026-10-08
+- Context: Discovered by Agent while implementing the signed self-update (Phase 2)
+- Category: Operations & Deployment
+- Instructions:
+  - Update trust root: Ed25519. Public key bundled at `module/pubkey.b64` (+ `module/pubkey.fp` = sha256 of that file, first 16 hex). Private key lives ONLY in the Actions secret `ALWAYSSTRONG_SIGNING_KEY` (base64 of a PKCS8 PEM). If that secret is lost the update chain must be re-cut and devices re-flashed.
+  - Sign locally: `openssl pkeyutl -sign -inkey key.pem -rawin -in <zip> -out sig`; the manifest's `signature` is base64 of those 64 raw bytes.
+  - Distribution channel: `mirror-data` branch holds `mirror/manifest.json`; devices fetch it from raw.githubusercontent + jsDelivr edges, and the zip from the GitHub release. Releases also carry `manifest.json` as an asset.
+  - Publish a manifest for a release: `ALWAYSSTRONG_SIGNING_KEY=... GH_TOKEN=... MIRROR_REMOTE=<remote> bash scripts/publish-manifest.sh <tag> <owner/repo>` (downloads the release zip, signs, attaches, pushes `mirror-data`). The `mirror-data` branch must already exist (created once via the Git Data API).
+  - The scheduled release workflow calls `publish-manifest.sh` inline after `gh release create`, because releases made with `GITHUB_TOKEN` do NOT trigger other workflows (`release: published` fires only for human/other-token releases).
+  - Set/refresh Actions secrets with `GH_TOKEN=<pat> gh secret set NAME --repo OWNER/REPO --body <value>` (the `gh` CLI handles libsodium encryption; plain API PUT would require sealed-box).
+  - Rebuild the verifier binaries: `bash scripts/build-verifier.sh` (pure-Go cross-compile to GOOS=linux for the 4 ABIs; no NDK).

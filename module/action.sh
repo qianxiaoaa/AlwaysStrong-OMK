@@ -26,6 +26,12 @@ if [ "$1" = "logs" ] && [ -x "$MODPATH/collect_logs.sh" ]; then
     exit 0
 fi
 
+# `action.sh update` — check for and install a signed module update, then exit.
+if [ "$1" = "update" ] && [ -x "$MODPATH/self_update.sh" ]; then
+    sh "$MODPATH/self_update.sh"
+    exit $?
+fi
+
 CONFIG_DIR=/data/adb/tricky_store
 LINE="========================="
 VER=$(grep -m1 '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2-)

@@ -86,6 +86,21 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
 - 说明：yypm 上游仓库**未声明许可证**。本仓库对其逻辑的移植仅作功能复用并在此标注来源，
   著作权归原仓库作者；若原作者有异议，可移除相应实现。
 
+### r4 追加修改（修改日期：2026-10-08）
+
+- 新增签名式自更新分发，设计参考 **yypm**（其 PHP 服务端 `update.php` +
+  `lib/sign.php` 的 Ed25519 签名清单、`verify_tool.go` 的端侧验签、`.github/workflows/mirror.yml`
+  的镜像发布思路），改为**纯 GitHub Actions** 实现（本仓库无自建服务端）：
+  - `native/verifier/src/verify_tool.go`：端侧 Ed25519 验签工具（独立实现，非复制）。
+  - `scripts/build-verifier.sh`：交叉编译 4 个 ABI。
+  - `scripts/gen-manifest.py`：生成签名清单 `manifest.json`。
+  - `scripts/publish-manifest.sh` + `.github/workflows/manifest.yml`：发布清单到 release
+    资产与 `mirror-data` 分支（`mirror/manifest.json`）。
+  - `module/self_update.sh`：设备端拉取 / 校验 / 安装。
+- 信任根：Ed25519 公钥随包分发（`module/pubkey.b64` + `pubkey.fp`），私钥仅存于仓库
+  Actions Secret `ALWAYSSTRONG_SIGNING_KEY`，不进入仓库。
+- 说明：同上，yypm 无许可证声明；此处为独立实现 + 思路借鉴，并标注来源。
+
 上游文件的完整源码见各自仓库；本仓库中未修改的上游脚本保留其原始版权头。
 
 ---

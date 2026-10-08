@@ -70,3 +70,15 @@ jobs:
             "out/AlwaysStrong-${{ steps.bump.outputs.version }}.zip" \
             --title "${{ steps.bump.outputs.version }}" \
             --generate-notes
+
+      # Releases created with GITHUB_TOKEN do not trigger the `release: published`
+      # event, so the manifest job cannot be a separate workflow here. Sign and
+      # publish it inline instead (attach to the release + push mirror-data).
+      - name: Sign + publish update manifest
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALWAYSSTRONG_SIGNING_KEY: ${{ secrets.ALWAYSSTRONG_SIGNING_KEY }}
+          MIRROR_REMOTE: origin
+        run: bash scripts/publish-manifest.sh "${{ steps.bump.outputs.version }}" "${{ github.repository }}"
+

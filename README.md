@@ -180,6 +180,23 @@ sh /data/adb/modules/tricky_store/collect_logs.sh
 
 ---
 
+## 自更新（签名分发）
+
+模块内置端侧 Ed25519 验签工具，配合 GitHub Actions 生成的**签名清单**实现自更新：
+
+- 设备端 `module/self_update.sh` 从 `mirror-data` 分支（raw + jsDelivr 镜像）拉取
+  `mirror/manifest.json`，仅当清单 `versionCode` 高于本地时才下载 release zip，
+  校验 sha256 + Ed25519 签名（公钥 `module/pubkey.b64`）后交给 root 管理器安装。
+- 清单由 `.github/workflows/manifest.yml`（以及「Upstream release」工作流的内联步骤）
+  生成：对 release 的 zip 用仓库 Secret `ALWAYSSTRONG_SIGNING_KEY`（Ed25519 私钥，
+  base64 的 PKCS8 PEM）签名，产出 `manifest.json`，同时挂到 release 资产与 `mirror-data` 分支。
+- 自动检查每 24 小时一次（在 `service.sh` 的小时循环内节流）；关闭：
+  `touch /data/adb/tricky_store/no_auto_update`。也可在 WebUI 点「更新」，或执行
+  `sh $MODPATH/action.sh update` 手动更新。
+- 私钥只存在于 Actions Secret，仓库内仅公钥；私钥丢失需重签并重新分发公钥。
+
+---
+
 ## 目录结构
 
 ```
@@ -195,11 +212,14 @@ module/                模块本体（AlwaysStrong v1.0.4 骨架 + OMK 适配脚
   ├── keybox_revoke_check.sh  对缓存的 Google 吊销名单比对序列号
   ├── pif_native_fetch.sh  从 PIF-Config-Generator 取最新稳定 Pixel 档案
   ├── status_fetch.sh  本地推导健康状态（结构 + 引擎存活 + 吊销名单）
+  ├── self_update.sh   签名式自更新：拉清单 → 验签 → 交 root 管理器安装
+  ├── pubkey.b64       Ed25519 公钥（自更新信任根）
   ├── soterta.sh       Qualcomm Soter 中继看护（可选，默认关闭）
   ├── engine.sh        PlayIntegrityFork 适配层
   ├── service.sh       服务启动 / 监控 / 注入兜底
   └── webroot/         WebUI
-native/                asfetch / aswatcher 源码与预编译产物
+native/                asfetch / aswatcher / verifier 源码与预编译产物
+scripts/               构建、清单生成 / 发布、版本升级等脚本
 docs/ADVANCED.md       进阶说明与排障
 build.sh               构建脚本
 ```
@@ -227,4 +247,5 @@ GPL-3.0 与 AGPL-3.0 兼容（AGPL §13），因此合并分发时整体适用 A
 - [qwq233/OhMyKeymint](https://github.com/qwq233/OhMyKeymint) — 证明引擎
 - [evoker0/AlwaysStrong](https://github.com/evoker0/AlwaysStrong) — 模块骨架、原生指纹抓取、WebUI
 - [osm0sis/PlayIntegrityFork](https://github.com/osm0sis/PlayIntegrityFork) — Play Integrity 修复
+- [yangyang8002/yypm](https://github.com/yangyang8002/yypm) — keybox 多源池与签名分发设计来源
 - 以及 AlwaysStrong 上游致谢中列出的 JingMatrix、Enginex0、KOWX712 等
