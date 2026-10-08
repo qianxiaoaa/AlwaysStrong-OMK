@@ -12,6 +12,7 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
 | OhMyKeymint | `1.3.5-196-10113e7`（ITxiao6666 分支） | qwq233、ITxiao6666 及贡献者 | AGPL-3.0-or-later + 附加条款 | https://github.com/ITxiao6666/OhMyKeymint |
 | AlwaysStrong | `v1.0.4` | Evokerr (evoker0) 及贡献者 | GPL-3.0 | https://github.com/evoker0/AlwaysStrong |
 | PlayIntegrityFork | `v18` | osm0sis 及贡献者 | GPL-3.0 | https://github.com/osm0sis/PlayIntegrityFork |
+| PIF 指纹 feed | `bot` 分支（数据） | KOWX712 及贡献者 | GPL-3.0 | https://github.com/KOWX712/PlayIntegrityFix |
 | yypm | 未标注版本 | yangyang8002 及贡献者 | 未声明（上游仓库无 LICENSE 文件） | https://github.com/yangyang8002/yypm |
 
 许可证全文：
@@ -82,6 +83,9 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
   上游仓库未附 LICENSE 文件，此处按「未声明」标注，仅作来源归属说明。
 - 指纹来源从 `Elcapitanoe/PIF-Config-Generator` 换回上游原生抓取
   （`flash.android.com` + `content-flashstation-pa.googleapis.com`）。
+- 并入 OhMyKeymint 的 PIF feed（`module/pif_native_fetch.sh`）：优先获取
+  `KOWX712/PlayIntegrityFix` `bot` 分支的 `device_list.json` + `device_prop/<product>.prop`，
+  raw.githubusercontent.com 为主、fastly.jsdelivr.net 兜底；失败再回退原生抓取。
 
 上游文件的完整源码见各自仓库；本仓库中未修改的上游脚本保留其原始版权头。
 

@@ -16,10 +16,12 @@ r10 之前一度停维，原因是当时公开镜像分发的 keybox 被**大规
 
 r11 的改动见 [CHANGELOG.md](CHANGELOG.md)：健康状态由模块本地推导（结构 + 引擎存活 +
 Google 吊销名单）。`v1.0.6-omk-r1` 重新起版：撤回 yypm 的 WebUI 与组件商店移植，WebUI 恢复为
-OMK 原版，指纹来源换回上游原生抓取（flash.android.com + content-flashstation-pa.googleapis.com），
-同时保留 yypm 的**多源 keybox 分发**（yurikey / integritybox / megatron 优先，keyboxhub /
-keyboxstatus 目录轮换兜底，移植为 `module/keybox_sources.sh`）。r10 的 `vb_hash` / `vb_key`
-钉值通道**在真机上仍未验证过**。
+OMK 原版，指纹来源并入 **OhMyKeymint 的 PIF feed**
+（[KOWX712/PlayIntegrityFix](https://github.com/KOWX712/PlayIntegrityFix) `bot` 分支的
+`device_list.json` + `device_prop/<product>.prop`，优先 raw.githubusercontent、jsDelivr 兜底），
+失败时回退到原有 asfetch / flashstation 原生抓取，同时保留 yypm 的**多源 keybox 分发**
+（yurikey / integritybox / megatron 优先，keyboxhub / keyboxstatus 目录轮换兜底，移植为
+`module/keybox_sources.sh`）。r10 的 `vb_hash` / `vb_key` 钉值通道**在真机上仍未验证过**。
 
 ---
 
@@ -53,7 +55,7 @@ keyboxstatus 目录轮换兜底，移植为 `module/keybox_sources.sh`）。r10 
 | 早期初始化 | 无 | `omk-early.sh`（post-fs-data 阶段） |
 | 配置桥接 | 无 | `omk-sync.sh`（镜像到 `/data/adb/tricky_store`） |
 | keybox 来源 | 无 | 多源池：yurikey / integritybox / megatron + keyboxhub / keyboxstatus（移植自 yypm） |
-| PIF 指纹档案 | 上游 autopif | 模块内原生抓取：flash.android.com + content-flashstation |
+| PIF 指纹档案 | 上游 autopif | OMK PIF feed（KOWX712/PlayIntegrityFix @bot）优先，asfetch/flashstation 兜底 |
 | 健康状态 | 无 | 本地推导：结构 + 引擎存活 + Google 吊销名单 |
 | Qualcomm Soter | 无 | 可选中继，默认关闭 |
 | Play Integrity | PlayIntegrityFork v18 | PlayIntegrityFork v18（不变） |
@@ -97,7 +99,7 @@ keyboxstatus 目录轮换兜底，移植为 `module/keybox_sources.sh`）。r10 
 | OhMyKeymint | `1.3.5-196-10113e7` | [ITxiao6666/OhMyKeymint](https://github.com/ITxiao6666/OhMyKeymint) |
 | PlayIntegrityFork | `v18` | [osm0sis/PlayIntegrityFork](https://github.com/osm0sis/PlayIntegrityFork) |
 | keybox | 多源池（yurikey / integritybox / megatron + keyboxhub / keyboxstatus） | [yangyang8002/yypm](https://github.com/yangyang8002/yypm) 的 `php-server/lib/sources.php` |
-| PIF 指纹档案 | Pixel Canary 原生抓取 | flash.android.com + content-flashstation-pa.googleapis.com |
+| PIF 指纹档案 | OhMyKeymint PIF feed（KOWX712/PlayIntegrityFix @bot） | raw.githubusercontent.com + fastly.jsdelivr.net |
 | AlwaysStrong 骨架 | `v1.0.4` | [evoker0/AlwaysStrong](https://github.com/evoker0/AlwaysStrong) |
 | asfetch / aswatcher | 随 AlwaysStrong v1.0.4 | 同上 |
 
@@ -193,7 +195,7 @@ module/                模块本体（AlwaysStrong v1.0.4 骨架 + OMK 适配脚
   ├── keybox_sources.sh  多源采集（yypm 移植）：base64 / hex / 10 轮嵌套解码 + 目录轮换
   ├── keybox_check.sh  keybox 结构校验（接受 dual / RSA-only / EC-only）
   ├── keybox_revoke_check.sh  对缓存的 Google 吊销名单比对序列号
-  ├── pif_native_fetch.sh  Pixel Canary 指纹原生抓取（flash.android.com + content-flashstation）
+  ├── pif_native_fetch.sh  指纹获取：OMK PIF feed 优先，asfetch/flashstation 兜底
   ├── status_fetch.sh  本地推导健康状态（结构 + 引擎存活 + 吊销名单）
   ├── soterta.sh       Qualcomm Soter 中继看护（可选，默认关闭）
   ├── engine.sh        PlayIntegrityFork 适配层

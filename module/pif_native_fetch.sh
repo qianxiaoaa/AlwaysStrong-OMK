@@ -1,27 +1,27 @@
 #!/system/bin/sh
-# AlwaysStrong — native fingerprint fallback.
+# AlwaysStrong — fingerprint fetch.
 #
-# PlayIntegrityFork's autopif4.sh crawls Google's Pixel build servers with
-# busybox `wget`, whose built-in TLS stalls mid-stream on some devices/CDNs —
-# so on those devices autopif4 silently fails and no fresh fingerprint lands.
-# We drive the fetch with our statically-linked rustls fetcher (asfetch), which
-# speaks TLS 1.2/1.3 correctly everywhere (curl / busybox wget only if absent),
-# AND take the minimal-endpoint path: flash.android.com (browser key, with an
-# embedded fallback) + content-flashstation-pa.googleapis.com (the canary build
-# per product). The old device-list crawl (developer.android.com versions + the
-# factory-image/OTA tables) and the source.android.com patch-bulletin crawl are
-# GONE — they were ~6 page fetches and two brittle HTML-table parses that made a
-# refresh take ~24s and graze the action timeout. Every current Pixel shares one
-# canary build, so a static device list + build query is equivalent and ~8x
-# faster with far fewer failure points.
+# Three sources are tried, in order:
+#   0. OhMyKeymint's PIF feed (KOWX712/PlayIntegrityFix @bot) — a static
+#      device_list.json catalog + one device_prop/<product>.prop per device,
+#      over raw.githubusercontent (jsDelivr fallback). Merged from
+#      ITxiao6666/OhMyKeymint; two files, no HTML scrape.
+#   1. asfetch autopif — our statically-linked rustls fetcher crawls
+#      flash.android.com (browser key, embedded fallback) +
+#      content-flashstation-pa.googleapis.com in-process; busybox wget / curl
+#      only when asfetch is absent. The old device-list / patch-bulletin crawls
+#      are GONE (they were ~6 page fetches + two brittle HTML-table parses).
+#   2. the same flashstation API driven from the shell, the last resort.
 #
-# On success it writes a minimal Pixel Canary pif.prop to $CONFIG_DIR/pif.prop
-# (same file the shipped static fallback in action.sh uses) and exits 0.
-# Any failure exits non-zero and leaves the existing pif untouched.
+# PlayIntegrityFork's own autopif4.sh drives busybox `wget`, whose built-in TLS
+# stalls mid-stream on some devices/CDNs, which is why the feed + asfetch paths
+# exist. On success this writes a minimal Pixel Canary pif.prop to
+# $CONFIG_DIR/pif.prop (same file the shipped static fallback in action.sh uses)
+# and exits 0. Any failure exits non-zero and leaves the existing pif untouched.
 #
 # Exit codes:
 #   0  fresh fingerprint written
-#   1  crawl/parse failed (nothing written)
+#   1  all sources failed (nothing written)
 
 CONFIG_DIR=/data/adb/tricky_store
 TARGET="$CONFIG_DIR/pif.prop"
@@ -83,11 +83,113 @@ bounded() { _bs="$1"; shift; if [ -n "$TO" ]; then $TO "$_bs" "$@"; else "$@"; f
 # floor (curl), so a slow link that keeps delivering bytes is never cut off; the
 # outer cap only backstops a process that is stuck entirely.
 
+# fetch OUTFILE URL [REFERER]  — REFERER is required by the flashstation API,
+# which is guarded by a referrer-restricted browser key. asfetch goes first (it
+# connects IPv4-first, so it works on every device incl. IPv6-only-DNS networks);
+# busybox wget / curl are fallbacks in case asfetch ever fails on a host.
+fetch() {
+    _o="$1"; _u="$2"; _ref="$3"
+    if [ -n "$ABI" ] && [ -x "$ASFETCH" ]; then
+        rm -f "$_o"
+        if [ -n "$_ref" ]; then bounded $((TIMEOUT + CAP_EXTRA)) "$ASFETCH" -T "$TIMEOUT" -H "Referer: $_ref" -o "$_o" "$_u" 2>/dev/null
+        else bounded $((TIMEOUT + CAP_EXTRA)) "$ASFETCH" -T "$TIMEOUT" -o "$_o" "$_u" 2>/dev/null; fi
+        [ -s "$_o" ] && return 0
+    fi
+    if [ -n "$BB" ]; then
+        rm -f "$_o"
+        if [ -n "$_ref" ]; then bounded $((TIMEOUT + CAP_EXTRA)) "$BB" wget -q -T "$TIMEOUT" --header "Referer: $_ref" --no-check-certificate -O "$_o" "$_u" 2>/dev/null
+        else bounded $((TIMEOUT + CAP_EXTRA)) "$BB" wget -q -T "$TIMEOUT" --no-check-certificate -O "$_o" "$_u" 2>/dev/null; fi
+        [ -s "$_o" ] && return 0
+    fi
+    if command -v curl >/dev/null 2>&1; then
+        rm -f "$_o"
+        if [ -n "$_ref" ]; then bounded $((TIMEOUT + CAP_EXTRA)) curl -fsSL --connect-timeout 15 --speed-limit 1 --speed-time "$TIMEOUT" --max-time $((TIMEOUT + CAP_EXTRA - 5)) -e "$_ref" -o "$_o" "$_u" 2>/dev/null
+        else bounded $((TIMEOUT + CAP_EXTRA)) curl -fsSL --connect-timeout 15 --speed-limit 1 --speed-time "$TIMEOUT" --max-time $((TIMEOUT + CAP_EXTRA - 5)) -o "$_o" "$_u" 2>/dev/null; fi
+        [ -s "$_o" ] && return 0
+    fi
+    if command -v wget >/dev/null 2>&1; then
+        rm -f "$_o"
+        if [ -n "$_ref" ]; then bounded $((TIMEOUT + CAP_EXTRA)) wget -q -T "$TIMEOUT" --header "Referer: $_ref" -O "$_o" "$_u" 2>/dev/null
+        else bounded $((TIMEOUT + CAP_EXTRA)) wget -q -T "$TIMEOUT" -O "$_o" "$_u" 2>/dev/null; fi
+        [ -s "$_o" ] && return 0
+    fi
+    return 1
+}
+
+# Prefer busybox grep/tac: toybox's `grep -A` (context lines) is unreliable on
+# some devices and returns nothing, which breaks the canary-block extraction.
+# autopif4 guards against the same broken-toybox-grep behaviour.
+if [ -n "$BB" ]; then GREP="$BB grep"; else GREP=grep; fi
+
+# ---- 0. OhMyKeymint PIF feed (KOWX712/PlayIntegrityFix @bot) ----------------
+# Merged from ITxiao6666/OhMyKeymint's PIF fetch. Instead of scraping the
+# flashstation build API, pull the pre-built Pixel Canary identities that
+# PlayIntegrityFix's `bot` branch publishes: a small device_list.json catalog
+# plus one device_prop/<product>.prop per device. raw.githubusercontent.com is
+# the primary host and fastly.jsdelivr.net the fallback for networks that can't
+# reach GitHub directly. Same identity the crawl below produces, but two static
+# files instead of an HTML scrape + a per-product build query.
+FEED_RAW="https://raw.githubusercontent.com/KOWX712/PlayIntegrityFix/bot"
+FEED_JS="https://fastly.jsdelivr.net/gh/KOWX712/PlayIntegrityFix@bot"
+FEED_TMP="$CONFIG_DIR/.pif_feed.$$"
+
+feed_get() { # $1=dest $2=relative path -> 0 when a host delivered the file
+    fetch "$1" "$FEED_RAW/$2" || fetch "$1" "$FEED_JS/$2"
+}
+
+if mkdir -p "$FEED_TMP" 2>/dev/null; then
+    if feed_get "$FEED_TMP/device_list.json" "device_list.json"; then
+        # catalog is [{"model": "...", "product": "..."}, ...]; grep the product
+        # strings straight out so no JSON parser is needed on device.
+        PRODS=$($GREP -o '"product"[[:space:]]*:[[:space:]]*"[^"]*"' "$FEED_TMP/device_list.json" \
+            | cut -d'"' -f4)
+        NPROD=$(printf '%s\n' "$PRODS" | $GREP -c .)
+        FEED_DEV=$(getprop ro.product.device 2>/dev/null)
+        _try=0
+        while [ "$_try" -lt 3 ] && [ "$NPROD" -gt 0 ]; do
+            _try=$((_try + 1))
+            if [ "$_try" -eq 1 ] && [ -n "$FEED_DEV" ] \
+               && printf '%s\n' "$PRODS" | $GREP -qx "${FEED_DEV}_beta"; then
+                SEL="${FEED_DEV}_beta"          # this device's own, when published
+            else
+                R="${RANDOM:-$$}"
+                IDX=$(( (R % NPROD) + 1 ))
+                SEL=$(printf '%s\n' "$PRODS" | sed -n "${IDX}p")
+            fi
+            [ -n "$SEL" ] || continue
+            feed_get "$FEED_TMP/feed.prop" "device_prop/$SEL.prop" || continue
+            $GREP -q '^FINGERPRINT=google/' "$FEED_TMP/feed.prop" || continue
+            # FINGERPRINT=google/<product>/<device>:<branch>/<build>/<inc>:...
+            _fp=$($GREP -m1 '^FINGERPRINT=' "$FEED_TMP/feed.prop" | cut -d= -f2-)
+            _rest=${_fp#*/}
+            _product=${_rest%%/*}
+            _dev=${_rest#*/}; _dev=${_dev%%:*}
+            {
+                cat "$FEED_TMP/feed.prop"
+                echo "PRODUCT=$_product"
+                echo "DEVICE=$_dev"
+                echo "DEVICE_INITIAL_SDK_INT=32"
+            } > "$FEED_TMP/identity.prop"
+            engine_spoof_block >> "$FEED_TMP/identity.prop"
+            if engine_install_pif "$FEED_TMP/identity.prop"; then
+                cp -f "$FEED_TMP/identity.prop" "$TARGET" 2>/dev/null
+                rm -rf "$FEED_TMP"
+                log "OMK feed ok ($ENGINE): $_fp"
+                exit 0
+            fi
+            log "OMK feed fetched ($SEL) but $ENGINE could not install it"
+            break
+        done
+    fi
+    rm -rf "$FEED_TMP"
+fi
+
 # ---- Fast path: asfetch's in-process fetcher --------------------------------
 # `asfetch autopif` does the whole crawl inside its bounded rustls client (real
 # JSON parsing, no busybox grep/tac, no shell subshells), writing pif.prop itself
-# in ~2-5s. This is the primary path; the shell crawl below is the fallback for
-# when the binary is absent/older or the in-process fetch fails. An old asfetch
+# in ~2-5s. Runs after the OMK feed above is unavailable/failed; the shell crawl
+# below is the last fallback for when the binary is absent/older or the
+# in-process fetch fails. An old asfetch
 # that predates the subcommand just treats "autopif" as a URL and exits non-zero,
 # so this stays safe on a stale binary.
 #
@@ -132,43 +234,6 @@ if [ -n "$ABI" ] && [ -x "$ASFETCH" ]; then
     log "native autopif unavailable/failed — trying shell crawl"
 fi
 
-# fetch OUTFILE URL [REFERER]  — REFERER is required by the flashstation API,
-# which is guarded by a referrer-restricted browser key. asfetch goes first (it
-# connects IPv4-first, so it works on every device incl. IPv6-only-DNS networks);
-# busybox wget / curl are fallbacks in case asfetch ever fails on a host.
-fetch() {
-    _o="$1"; _u="$2"; _ref="$3"
-    if [ -n "$ABI" ] && [ -x "$ASFETCH" ]; then
-        rm -f "$_o"
-        if [ -n "$_ref" ]; then bounded $((TIMEOUT + CAP_EXTRA)) "$ASFETCH" -T "$TIMEOUT" -H "Referer: $_ref" -o "$_o" "$_u" 2>/dev/null
-        else bounded $((TIMEOUT + CAP_EXTRA)) "$ASFETCH" -T "$TIMEOUT" -o "$_o" "$_u" 2>/dev/null; fi
-        [ -s "$_o" ] && return 0
-    fi
-    if [ -n "$BB" ]; then
-        rm -f "$_o"
-        if [ -n "$_ref" ]; then bounded $((TIMEOUT + CAP_EXTRA)) "$BB" wget -q -T "$TIMEOUT" --header "Referer: $_ref" --no-check-certificate -O "$_o" "$_u" 2>/dev/null
-        else bounded $((TIMEOUT + CAP_EXTRA)) "$BB" wget -q -T "$TIMEOUT" --no-check-certificate -O "$_o" "$_u" 2>/dev/null; fi
-        [ -s "$_o" ] && return 0
-    fi
-    if command -v curl >/dev/null 2>&1; then
-        rm -f "$_o"
-        if [ -n "$_ref" ]; then bounded $((TIMEOUT + CAP_EXTRA)) curl -fsSL --connect-timeout 15 --speed-limit 1 --speed-time "$TIMEOUT" --max-time $((TIMEOUT + CAP_EXTRA - 5)) -e "$_ref" -o "$_o" "$_u" 2>/dev/null
-        else bounded $((TIMEOUT + CAP_EXTRA)) curl -fsSL --connect-timeout 15 --speed-limit 1 --speed-time "$TIMEOUT" --max-time $((TIMEOUT + CAP_EXTRA - 5)) -o "$_o" "$_u" 2>/dev/null; fi
-        [ -s "$_o" ] && return 0
-    fi
-    if command -v wget >/dev/null 2>&1; then
-        rm -f "$_o"
-        if [ -n "$_ref" ]; then bounded $((TIMEOUT + CAP_EXTRA)) wget -q -T "$TIMEOUT" --header "Referer: $_ref" -O "$_o" "$_u" 2>/dev/null
-        else bounded $((TIMEOUT + CAP_EXTRA)) wget -q -T "$TIMEOUT" -O "$_o" "$_u" 2>/dev/null; fi
-        [ -s "$_o" ] && return 0
-    fi
-    return 1
-}
-
-# Prefer busybox grep/tac: toybox's `grep -A` (context lines) is unreliable on
-# some devices and returns nothing, which breaks the canary-block extraction.
-# autopif4 guards against the same broken-toybox-grep behaviour.
-if [ -n "$BB" ]; then GREP="$BB grep"; else GREP=grep; fi
 reverse() { # portable `tac`
     if [ -n "$BB" ]; then "$BB" tac
     elif command -v tac >/dev/null 2>&1; then tac

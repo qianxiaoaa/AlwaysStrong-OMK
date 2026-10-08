@@ -21,8 +21,13 @@
   继续随包分发——yurikey / integritybox / megatron 优先，keyboxhub / keyboxstatus 目录轮换兜底，
   按优先级 + 吊销过滤择优；`keybox_fetch.sh` 走该池，`keybox_revoke_check.sh` / `status_fetch.sh`
   使用多镜像吊销名单（purainity / KimmyXYC 优先，Google 官方兜底）。
-- **指纹来源换回上游原生抓取**：由 `Elcapitanoe/PIF-Config-Generator` 的 release feed 撤回为
-  `flash.android.com` + `content-flashstation-pa.googleapis.com` 的原生抓取（即 r10 行为）。
+- **并入 OhMyKeymint 的 PIF feed**：指纹获取优先走 `KOWX712/PlayIntegrityFix` `bot` 分支的
+  `device_list.json` + `device_prop/<product>.prop`（raw.githubusercontent.com 优先、
+  fastly.jsdelivr.net 兜底），失败再回退 `flash.android.com` + `content-flashstation-pa.googleapis.com`
+  的 asfetch / 原生抓取。
+- **捐赠按钮改为微信收款码**：`module/webroot/donate.png` 随包分发，点击后保存到
+  `/sdcard/AlwaysStrong-donate.png` 并提示用微信扫一扫；所有 `https://t.me/` 链接统一指向
+  `https://t.me/AlwaysStrongR`（`module.prop`、WebUI 页脚、安装提示）。
 - 保留 r11 的证明引擎 **OhMyKeymint 1.3.5-196-10113e7**、可选 Soter 中继与本地推导健康状态。
 
 **Bundled in every build of this release**
