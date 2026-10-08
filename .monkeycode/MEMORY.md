@@ -44,7 +44,7 @@ This file records user instructions, preferences, and teachings for reference in
 - Context: Discovered by Agent while building and releasing AlwaysStrong-OMK
 - Category: Build Methods
 - Instructions:
-  - Build: `bash build.sh --omk-file /tmp/opencode/omk135.zip` (the local OhMyKeymint payload avoids re-downloading). Output: `out/AlwaysStrong-<version>.zip`. Run builds through the background-terminal tool per the resource rules.
+  - Build: `bash build.sh --omk-file /tmp/opencode/omk135.zip --pif-file /tmp/opencode/pif18.zip` (local OhMyKeymint + PlayIntegrityFork payloads avoid re-downloading). Output: `out/AlwaysStrong-<version>.zip`. Run builds through the background-terminal tool per the resource rules.
   - Revision bump: `bash scripts/bump-r.sh` increments the `-omk-rN` suffix, updates `module/module.prop` (`version` + `versionCode`) and prepends a `CHANGELOG.md` section, taking notes from `.upstream-changes.txt` (or `UPSTREAM_SUMMARY`). Prints the new tag.
   - The release workflow `.github/workflows/upstream-release.yml` runs daily 02:00 Beijing (cron `0 18 * * *`) to re-pin OhMyKeymint/PlayIntegrityFork and bump `-omk-rN` automatically.
   - Every new `module/*.sh` must be named in `module/customize.sh`'s extraction list, or `build.sh`'s install-coverage check ("every staged script has an installer") fails the build.
@@ -79,3 +79,12 @@ This file records user instructions, preferences, and teachings for reference in
 - Instructions:
   - origin（qianxiaoaa/AlwaysStrong-OMK）上已存在旧 三改 线的标签 `v1.0.5-omk-r1..r7`（`v1.0.5-omk-r1`=f59b8fb，r2..r7 从其派生）。重新起版时不要复用 `v1.0.5-omk-rN`，已改用 `v1.0.6-omk-r1`（versionCode 10601）。
   - 发布用 `curl` + `/root/.netrc` 的 token（`Authorization: token $TOKEN`）：`POST /repos/qianxiaoaa/AlwaysStrong-OMK/releases` 建 release，再把 zip 以 `Content-Type: application/zip` POST 到其 `upload_url`。
+
+[Project Knowledge Summary]
+- Date: 2026-10-08
+- Context: Discovered by Agent while re-pointing the v1.0.6-omk-r1 tag and replacing its release asset without a version bump
+- Category: Operations & Deployment
+- Instructions:
+  - Token 提取（`git credential fill` 在本环境返回 500）：`TOKEN=$(awk '{for(i=1;i<=NF;i++) if($i=="password") print $(i+1)}' /root/.netrc)`；所有 API 调用加 `Authorization: token $TOKEN`。
+  - 不升版、把 tag 指到最新提交并替换已有 Release 资源时的顺序：`git tag -f <tag> <sha>` + `git push -f origin <tag>` → `PATCH /repos/{o}/{r}/releases/{id}`（用 JSON `{"body":"..."}` 更新说明）→ `DELETE /repos/{o}/{r}/releases/assets/{asset_id}` → `POST https://uploads.github.com/repos/{o}/{r}/releases/{id}/assets?name=<file>`（`Content-Type: application/zip`，`--data-binary @<zip>`）。同名资源需先删后传。
+  - 通过 `.../releases/tags/<tag>` 查 release id 与 asset id；`.../git/ref/tags/<tag>` 确认 tag 指向的 sha。
