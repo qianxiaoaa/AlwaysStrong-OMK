@@ -101,6 +101,8 @@ for f in module.prop service.sh post-fs-data.sh action.sh \
          import_pif.sh reapply_spoof.sh lite_pif_sync.sh self_update.sh \
          components.sh \
          common.sh webui.sh yypm_service.sh \
+         adb_disabler.sh gms_kill.sh widevine.sh zygisk_next.sh \
+         first_boot_backup.sh scheduler.sh \
          appinfo.dex appinfo.sha256 \
          detect_risk_apps.txt detect_trace_paths.txt \
          pubkey.yypm.b64 pubkey.yypm.fp \

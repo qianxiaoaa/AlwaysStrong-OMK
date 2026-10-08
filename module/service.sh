@@ -230,6 +230,35 @@ fi
     fi
 } &
 
+# --- Specter-derived feature actions (opt-in) -----------------------------
+# Ported from dpejoh/specter: ADB disabler, Zygisk Next config, Widevine L1 and
+# GMS/DroidGuard kill. Every script self-gates on its yypm config key, so with
+# the shipped defaults (all OFF) this block is a no-op and changes nothing about
+# the default boot. The user flips them from the WebUI 环境对抗 page.
+#   adb_disabler    -> adb_disabler=on
+#   zygisk_next     -> zygisk_next_cfg=on
+#   widevine        -> widevine_l1=on
+#   gms_kill        -> gms_force_stop=on / gms_clear_data=on
+# (first_boot_backup runs earlier, in post-fs-data.sh.)
+{
+    # settings/pm/am require the framework up; wait for boot then settle.
+    i=0
+    while [ "$(getprop sys.boot_completed)" != "1" ] && [ "$i" -lt 60 ]; do sleep 3; i=$((i+1)); done
+    sleep 5
+    [ -x "$MODDIR/adb_disabler.sh" ] && sh "$MODDIR/adb_disabler.sh" 2>&1 | log -t "AlwaysStrong-adb"
+    [ -x "$MODDIR/zygisk_next.sh" ]  && sh "$MODDIR/zygisk_next.sh"  2>&1 | log -t "AlwaysStrong-zyn"
+    [ -x "$MODDIR/widevine.sh" ]     && sh "$MODDIR/widevine.sh"     2>&1 | log -t "AlwaysStrong-widevine"
+    [ -x "$MODDIR/gms_kill.sh" ]     && sh "$MODDIR/gms_kill.sh"     2>&1 | log -t "AlwaysStrong-gms"
+} &
+
+# --- Opt-in periodic scheduler (specter scheduler) ------------------------
+# Off unless scheduler_enable=on; then it runs the indicator / target / autopif
+# tasks on their own intervals. It never fetches the keybox (the yypm backend
+# owns that), so it cannot double-write keybox.xml.
+if [ -x "$MODDIR/scheduler.sh" ]; then
+    { sh "$MODDIR/scheduler.sh" 2>&1 | log -t "AlwaysStrong-sched"; } &
+fi
+
 # ro.boot.vbmeta.digest is deliberately left as the kernel set it. An AVB digest
 # is hashed over the vbmeta struct, so hashing the partition instead yields a
 # plausible-looking value that matches no certified build -- worse than an empty

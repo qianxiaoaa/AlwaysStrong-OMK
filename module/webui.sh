@@ -179,6 +179,71 @@ case "${1:-status}" in
         cfg_set auto_debug "$2"
         echo "AUTO_DEBUG=$2"
         ;;
+    # ---- specter 派生能力（ADB 关闭 / GMS 杀进程 / Widevine L1 / Zygisk 配置）----
+    adb-disabler)
+        case "${2:-}" in on|off) cfg_set adb_disabler "$2" ;; *) echo "用法: adb-disabler on|off"; exit 1 ;; esac
+        log "[·] ADB 调试关闭已设为 ${2}"
+        [ "${2:-}" = "on" ] && sh "$MODDIR/adb_disabler.sh" >/dev/null 2>&1
+        echo "ADB_DISABLER=$2"
+        ;;
+    adb-sub)
+        # 子项开关：adb-sub <dev_options|usb_debug|oem_unlock> on|off
+        case "${2:-}" in dev_options|usb_debug|oem_unlock) ;; *) echo "用法: adb-sub <dev_options|usb_debug|oem_unlock> on|off"; exit 1 ;; esac
+        case "${3:-}" in on|off) ;; *) echo "用法: adb-sub <dev_options|usb_debug|oem_unlock> on|off"; exit 1 ;; esac
+        cfg_set "adb_disabler_$2" "$3"
+        log "[·] ADB 子项 $2 已设为 $3"
+        [ "$(cfg_get adb_disabler off)" = "on" ] && sh "$MODDIR/adb_disabler.sh" >/dev/null 2>&1
+        echo "ADB_SUB_$2=$3"
+        ;;
+    gms-kill)
+        case "${2:-all}" in
+            force) sh "$MODDIR/gms_kill.sh" manual-force ;;
+            clear) sh "$MODDIR/gms_kill.sh" manual-clear ;;
+            all|'') sh "$MODDIR/gms_kill.sh" manual-all ;;
+            *) echo "用法: gms-kill [force|clear|all]"; exit 1 ;;
+        esac
+        ;;
+    gms-auto)
+        # gms-auto <force_stop|clear_data> on|off
+        case "${2:-}" in force_stop|clear_data) ;; *) echo "用法: gms-auto <force_stop|clear_data> on|off"; exit 1 ;; esac
+        case "${3:-}" in on|off) ;; *) echo "用法: gms-auto <force_stop|clear_data> on|off"; exit 1 ;; esac
+        cfg_set "gms_$2" "$3"
+        log "[·] GMS $2 已设为 $3"
+        echo "GMS_$2=$3"
+        ;;
+    widevine-install)
+        sh "$MODDIR/widevine.sh" manual
+        ;;
+    widevine-auto)
+        case "${2:-}" in on|off) cfg_set widevine_l1 "$2" ;; *) echo "用法: widevine-auto on|off"; exit 1 ;; esac
+        log "[·] Widevine L1 已设为 ${2}"
+        [ "${2:-}" = "on" ] && sh "$MODDIR/widevine.sh" manual
+        echo "WIDEVINE_L1=$2"
+        ;;
+    zygisk-cfg)
+        case "${2:-}" in on|off) cfg_set zygisk_next_cfg "$2" ;; *) echo "用法: zygisk-cfg on|off"; exit 1 ;; esac
+        log "[·] Zygisk Next 配置已设为 ${2}"
+        [ "${2:-}" = "on" ] && sh "$MODDIR/zygisk_next.sh" >/dev/null 2>&1
+        echo "ZYGISK_NEXT_CFG=$2"
+        ;;
+    first-boot-backup)
+        sh "$MODDIR/first_boot_backup.sh" manual
+        ;;
+    fb-auto)
+        case "${2:-}" in on|off) cfg_set first_boot_backup "$2" ;; *) echo "用法: fb-auto on|off"; exit 1 ;; esac
+        log "[·] 首次备份已设为 ${2}"
+        [ "${2:-}" = "on" ] && sh "$MODDIR/first_boot_backup.sh" >/dev/null 2>&1
+        echo "FIRST_BOOT_BACKUP=$2"
+        ;;
+    scheduler)
+        case "${2:-}" in on|off) cfg_set scheduler_enable "$2" ;; *) echo "用法: scheduler on|off"; exit 1 ;; esac
+        log "[·] 周期调度器已设为 ${2}"
+        echo "SCHEDULER=$2"
+        ;;
+    components-status)
+        # 逐条列出组件：是否已装 / 是否启用 / 是否可更新（WebUI 组件页渲染）
+        components_status
+        ;;
     mount)
         mkdir -p "$TRICKY_DIR"
         if [ -f "$KEYBOX_CACHE" ]; then

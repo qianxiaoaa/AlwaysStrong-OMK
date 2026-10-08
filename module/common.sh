@@ -2193,6 +2193,25 @@ echo_status() {
     echo "MOUNT_HIDER=$_mh"
     echo "ABNORMAL_PATHS=$(cfg_get abnormal_paths "$ABNORMAL_DEFAULT")"
 
+    # ---- specter 派生能力（默认关；WebUI 环境对抗页可开）----
+    # 每个都对应一个独立脚本，脚本自身按同名 config 键自闸门。
+    echo "ADB_DISABLER=$(cfg_get adb_disabler off)"
+    echo "ADB_DEV_OPTIONS=$(cfg_get adb_disabler_dev_options on)"
+    echo "ADB_USB_DEBUG=$(cfg_get adb_disabler_usb_debug on)"
+    echo "ADB_OEM_UNLOCK=$(cfg_get adb_disabler_oem_unlock on)"
+    echo "GMS_FORCE_STOP=$(cfg_get gms_force_stop off)"
+    echo "GMS_CLEAR_DATA=$(cfg_get gms_clear_data off)"
+    echo "WIDEVINE_L1=$(cfg_get widevine_l1 off)"
+    echo "ZYGISK_NEXT_CFG=$(cfg_get zygisk_next_cfg off)"
+    if [ -d /data/adb/modules/zygisksu ] || [ -d /data/adb/modules_update/zygisksu ]; then
+        echo "ZYGISK_NEXT_INSTALLED=1"
+    else
+        echo "ZYGISK_NEXT_INSTALLED=0"
+    fi
+    echo "FIRST_BOOT_BACKUP=$(cfg_get first_boot_backup on)"
+    echo "FB_BACKUP_COUNT=$(ls -1 /data/adb/tricky_store/backups/*.bak 2>/dev/null | wc -l | tr -d ' ')"
+    echo "SCHEDULER=$(cfg_get scheduler_enable off)"
+
     # 附属模块更新检查结果（由 webui.sh check-packages 写入缓存）
     echo "UPDATE_CHECKED=$(update_state_field checked_at 未检查)"
     echo "UPDATE_NEED=$(update_state_field need 0)"
@@ -2567,6 +2586,62 @@ update_state_field() { # $1 key  $2 default
     local v=$(grep "^$1=" "$f" 2>/dev/null | tail -1 | cut -d= -f2-)
     [ -n "$v" ] && echo "$v" || echo "$2"
 }
+
+# ---- 组件清单状态（WebUI 组件页逐条渲染，纯本地读取，不触网）----
+# 数据来源：$TMP/pmeta.txt（上一轮 check-packages / install 落盘的清单元信息）
+# 输出：
+#   COMP_STATE=OK|NONE
+#   COMP_TOTAL / COMP_UPD / COMP_NEW / COMP_ERR / COMP_ENABLED
+#   COMP|名称|id|类型|云端版本|本地版本|状态|启用|自动|文件名
+# 状态：NEW 未安装 / UPD 可更新 / OK 已最新 / STAGED 已装待重启 / ERR 异常 / ? 未知
+# 启用：1 已启用 / 0 未启用（含 disabled）/ 2 待重启生效
+components_status() {
+    local pm="$TMP/pmeta.txt"
+    local total=0 upd=0 new=0 err=0 en=0
+    local fn fid fvc fvr fty fau fpk mid label localv cloudv st enabled auto
+    if [ ! -s "$pm" ]; then
+        echo "COMP_TOTAL=0"; echo "COMP_UPD=0"; echo "COMP_NEW=0"
+        echo "COMP_ERR=0"; echo "COMP_ENABLED=0"; echo "COMP_STATE=NONE"
+        return 0
+    fi
+    list_installed
+    while IFS='|' read -r fn fid fvc fvr fty fau fpk <&3; do
+        [ -n "$fn" ] || continue
+        mid="${fid:-$(echo "$fn" | sed 's/\.\(zip\|apk\)$//')}"
+        label="$mid"; enabled=0; auto=0; localv="-"; cloudv="${fvr:-$fvc}"
+        [ "$fau" = "1" ] && auto=1
+        if [ "$fty" = "apk" ]; then
+            label="${fpk:-$mid}"
+            if [ -n "$fpk" ] && apk_installed "$fpk"; then enabled=1; localv="已安装"; else localv="未安装"; fi
+        else
+            if [ -d "/data/adb/modules/$mid" ]; then
+                if [ -e "/data/adb/modules/$mid/disable" ]; then enabled=0; else enabled=1; fi
+                localv=$(grep -F "$mid|" "$TMP/installed.txt" 2>/dev/null | cut -d'|' -f3 | head -1)
+            elif [ -d "/data/adb/modules_update/$mid" ]; then
+                enabled=2
+                localv=$(grep -F "$mid|" "$TMP/installed.txt" 2>/dev/null | cut -d'|' -f3 | head -1)
+            fi
+            [ -n "$localv" ] || localv="未安装"
+        fi
+        # 状态优先沿用上一轮检查结果（check_out.txt 行：CHECK|fn|label|lvc|rvc|st|msg）
+        st=$(grep -F "|$fn|" "$TMP/check_out.txt" 2>/dev/null | cut -d'|' -f6 | head -1)
+        [ -n "$st" ] || st="?"
+        if [ "$enabled" = "2" ]; then st="STAGED"
+        elif [ "$enabled" = "0" ] && [ "$st" = "OK" ]; then st="NEW"
+        fi
+        total=$((total + 1))
+        case "$st" in
+            UPD) upd=$((upd + 1)) ;;
+            NEW) new=$((new + 1)) ;;
+            ERR|MISMATCH) err=$((err + 1)) ;;
+        esac
+        [ "$enabled" = "1" ] && en=$((en + 1))
+        echo "COMP|$label|$mid|${fty:-module}|${cloudv:--}|$localv|$st|$enabled|$auto|$fn"
+    done 3< "$pm"
+    echo "COMP_TOTAL=$total"; echo "COMP_UPD=$upd"; echo "COMP_NEW=$new"
+    echo "COMP_ERR=$err"; echo "COMP_ENABLED=$en"; echo "COMP_STATE=OK"
+}
+
 # ---- 下载服务端 package 清单里列出的所有模块 ----
 # ---- 清单元信息解析 ----
 # 输出：模块id|versionCode（供多处复用，避免重复解析）

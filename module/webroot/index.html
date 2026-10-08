@@ -117,6 +117,11 @@ word-break:break-all;overflow-wrap:anywhere;text-align:right;max-width:62%;min-w
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0}
 .switch-row .lab{font-size:14px;color:var(--on-surface)}
 .switch-row .hint{font-size:12px;color:var(--on-surface-variant);margin-top:2px}
+.complist{margin:8px 0 4px}
+.complist .comp{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--outline,rgba(128,128,128,.15))}
+.complist .comp:last-child{border-bottom:none}
+.complist .cn{font-size:13px;color:var(--on-surface);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.complist .cm{font-size:11px;color:var(--on-surface-variant);margin-top:1px}
 /* 开关（M3 Switch）。原来有两个问题：
    1) 描边是用 border 画的，而绝对定位的偏移量是相对「内边距框」算的 —— 52px 的轨道
       去掉左右各 2px 边框只剩 48px，可 .on 却写 left:26px + width:24px = 50px，
@@ -485,6 +490,9 @@ html[data-lockdown="1"] #acBanner{
     <div><div class="lab">组件自动安装</div><div class="hint">巡检时自动安装清单里标了自动装的组件（默认关闭）</div></div>
     <div class="switch" id="autoInstallSwitch"></div>
   </div>
+  <div class="row mt12"><span class="k">组件清单</span><span class="v" id="compSummary">未加载</span></div>
+  <div id="compList" class="complist"></div>
+  <button class="btn ghost" id="btnCompRefresh"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg> 刷新组件状态</button>
   <p class="note">「检查」只检查不安装；标了自动装的组件（FuseFixer / HMA-OSS / Zygisk-Next）巡检时会自动装。「一键安装」把可更新与未安装的条目都装上：模块交给 ksud（重启生效）、应用交给 pm（立即生效）。HMA-OSS 装上后自动写好默认隐藏配置（对春秋等检测应用隐藏 MT/Scene/NP/Shizuku/各管理器/反挂作弊包，管理 App 里可查看修改）；旧组件 hma-uidfake 会被自动标记移除（重启清理）</p>
 </div>
 
@@ -593,6 +601,60 @@ html[data-lockdown="1"] #acBanner{
   <p class="note">「隐藏应用列表生效」—— 先用「一键检测前预备」再测；仍命中看日志里的痕迹报告定位。
   管理器家族只报状态不自动处理：v2.8.7 起已并入查询级隐藏，桌面照常打开、WebUI 不受影响。</p>
   </div></details>
+</div>
+
+<div class="card wide">
+  <h2>调试伪装与设备增强（Specter）</h2>
+  <p class="note">以下能力移植自 <b>dpejoh/specter</b>，默认全部关闭，逐项开启、立即生效。
+  均为可逆的属性/配置层操作，不改动系统分区。</p>
+  <div class="switch-row">
+    <div><div class="lab">ADB 调试关闭</div><div class="hint">关闭开发者选项 / USB 调试 / OEM 解锁（开启后你自己的 ADB 也会失效）</div></div>
+    <div class="switch" id="adbSwitch"></div>
+  </div>
+  <div class="switch-row">
+    <div><div class="lab">　开发商选项</div><div class="hint">development_settings_enabled = 0</div></div>
+    <div class="switch" id="adbDevSwitch"></div>
+  </div>
+  <div class="switch-row">
+    <div><div class="lab">　USB 调试</div><div class="hint">ro.debuggable / adb_enabled / init.svc.adbd</div></div>
+    <div class="switch" id="adbUsbSwitch"></div>
+  </div>
+  <div class="switch-row">
+    <div><div class="lab">　OEM 解锁</div><div class="hint">ro.oem_unlock_supported = 0</div></div>
+    <div class="switch" id="adbOemSwitch"></div>
+  </div>
+  <div class="switch-row mt14">
+    <div><div class="lab">Widevine L1 注入</div><div class="hint">经厂商 KmInstallKeybox 写入认证密钥（仅部分高通机型可用）</div></div>
+    <div class="switch" id="wvSwitch"></div>
+  </div>
+  <div class="switch-row">
+    <div><div class="lab">Zygisk Next 配置</div><div class="hint">denylist_enforce = 2（仅装了 Zygisk Next 时）</div></div>
+    <div class="switch" id="zynSwitch"></div>
+  </div>
+  <div class="switch-row">
+    <div><div class="lab">GMS 自动杀进程</div><div class="hint">开机后强制结束 DroidGuard / GMS，强制刷新认证</div></div>
+    <div class="switch" id="gmsForceSwitch"></div>
+  </div>
+  <div class="switch-row">
+    <div><div class="lab">Play 商店清数据</div><div class="hint">pm clear com.android.vending（会退出商店登录态）</div></div>
+    <div class="switch" id="gmsClearSwitch"></div>
+  </div>
+  <div class="row2">
+    <button class="btn ghost" id="btnGmsKill"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg> 立即结束 GMS</button>
+    <button class="btn ghost" id="btnWidevine"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg> 立即注入 Widevine</button>
+  </div>
+  <div class="switch-row mt14">
+    <div><div class="lab">首次备份</div><div class="hint">开机首启把原始 keybox/target/补丁档备份到 backups/</div></div>
+    <div class="switch" id="fbSwitch"></div>
+  </div>
+  <div class="switch-row">
+    <div><div class="lab">周期调度器</div><div class="hint">独立间隔跑：keybox 指示 / 目标清单 / 指纹（可选，默认由主循环负责）</div></div>
+    <div class="switch" id="schedSwitch"></div>
+  </div>
+  <div class="row"><span class="k">备份文件数</span><span class="v" id="fbState">-</span></div>
+  <div class="row2">
+    <button class="btn ghost" id="btnFirstBootBackup"><svg class="i" aria-hidden="true"><use href="#i-undo"/></svg> 立即备份</button>
+  </div>
 </div>
 
 <div class="card wide">
@@ -1019,6 +1081,19 @@ async function refresh(useCache){
   document.getElementById('abnPaths').textContent='清理范围：'+(s.ABNORMAL_PATHS||'-');
   var ttN=parseInt(s.TT_COUNT||'0',10)||0;
   document.getElementById('ttState').textContent=(s.TT_EXISTS==='1')?(ttN+' 行'):'不存在（未装 TEESimulator？）';
+
+  // ---- 调试伪装与设备增强（Specter 派生）----
+  document.getElementById('adbSwitch').classList.toggle('on',s.ADB_DISABLER==='on');
+  document.getElementById('adbDevSwitch').classList.toggle('on',s.ADB_DEV_OPTIONS!=='off');
+  document.getElementById('adbUsbSwitch').classList.toggle('on',s.ADB_USB_DEBUG!=='off');
+  document.getElementById('adbOemSwitch').classList.toggle('on',s.ADB_OEM_UNLOCK!=='off');
+  document.getElementById('wvSwitch').classList.toggle('on',s.WIDEVINE_L1==='on');
+  document.getElementById('zynSwitch').classList.toggle('on',s.ZYGISK_NEXT_CFG==='on');
+  document.getElementById('gmsForceSwitch').classList.toggle('on',s.GMS_FORCE_STOP==='on');
+  document.getElementById('gmsClearSwitch').classList.toggle('on',s.GMS_CLEAR_DATA==='on');
+  document.getElementById('fbSwitch').classList.toggle('on',s.FIRST_BOOT_BACKUP==='on');
+  document.getElementById('schedSwitch').classList.toggle('on',s.SCHEDULER==='on');
+  document.getElementById('fbState').textContent=(s.FB_BACKUP_COUNT||'0')+' 份';
 
   // 附属模块更新检查结果
   var need=parseInt(s.UPDATE_NEED||'0',10)||0;
@@ -2295,6 +2370,68 @@ envAutoToggle('ffLspdAutoSwitch','ff-lspd-auto','FuseFixer 自动配置');
 envAutoToggle('prepAutoSwitch','detect-prep-auto','检测前预备开机执行');
 envAutoToggle('susfsAutoSwitch','susfs-auto','SUSFS 自动加固');
 envAutoToggle('autoInstallSwitch','auto-install','组件自动安装');
+// ---- Specter 派生能力开关（开 = 开机自动执行 + 立即生效；关 = 恢复默认）----
+envAutoToggle('adbSwitch','adb-disabler','ADB 调试关闭');
+envAutoToggle('adbDevSwitch','adb-sub dev_options','开发商选项关闭');
+envAutoToggle('adbUsbSwitch','adb-sub usb_debug','USB 调试关闭');
+envAutoToggle('adbOemSwitch','adb-sub oem_unlock','OEM 解锁关闭');
+envAutoToggle('wvSwitch','widevine-auto','Widevine L1 注入');
+envAutoToggle('zynSwitch','zygisk-cfg','Zygisk Next 配置');
+envAutoToggle('gmsForceSwitch','gms-auto force_stop','GMS 自动杀进程');
+envAutoToggle('gmsClearSwitch','gms-auto clear_data','Play 商店清数据');
+envAutoToggle('fbSwitch','fb-auto','首次备份');
+envAutoToggle('schedSwitch','scheduler','周期调度器');
+
+// ---- 组件清单：逐条列出已装 / 启用 / 可更新（点 webui.sh components-status 解析 COMP| 行）----
+var COMP_ICON={OK:'#4caf50',UPD:'#ff9800',NEW:'#2196f3',STAGED:'#ff9800',ERR:'#f44336','?':'#9e9e9e'};
+async function loadComponents(){
+  var box=document.getElementById('compList');
+  var sum=document.getElementById('compSummary');
+  if(!box)return;
+  busy('btnCompRefresh',true,'读取中...');
+  try{
+    var r=await exec(MODDIR+'/webui.sh components-status');
+    var rows=[],meta={};
+    (r.stdout||'').split('\n').forEach(function(l){
+      var p=l.split('|');
+      if(p[0]==='COMP'&&p.length>=10){rows.push(p);}
+      else if(/^COMP_(TOTAL|UPD|NEW|ERR|ENABLED|STATE)=/.test(l)){var i=l.indexOf('=');meta[l.slice(0,i)]=l.slice(i+1);}
+    });
+    if(!rows.length){box.innerHTML='<div class="appempty">'+((meta.COMP_STATE==='NONE')?'尚无组件清单，请先点「检查」':'无组件')+'</div>';if(sum)sum.textContent=(meta.COMP_STATE==='NONE')?'未加载':'0 个';return;}
+    var html='';
+    rows.forEach(function(p){
+      var name=p[1],id=p[2],ty=p[3],cloud=p[4],lv=p[5],st=p[6],en=p[7],au=p[8];
+      var stMap={OK:'已最新',NEW:'未安装',UPD:'可更新',STAGED:'待重启',ERR:'异常','?':'未知'};
+      var pillCls=(st==='OK')?'ok':(st==='ERR'?'err':(st==='UPD'||st==='NEW'||st==='STAGED')?'warn2':'');
+      var enTxt=(en==='1')?'已启用':(en==='2'?'待重启':'未启用');
+      var enDot=(en==='1'||en==='2')?'on':'off';
+      html+='<div class="comp"><div><div class="cn">'+esc(name)+(au==='1'?' <span class="pill">自动</span>':'')+'</div>'
+        +'<div class="cm"><span class="dot '+enDot+'" style="display:inline-block;margin-right:5px"></span>'+esc(enTxt)+' · '+esc(ty)+' · 本地 '+esc(lv)+' / 云端 '+esc(cloud)+'</div></div>'
+        +'<span class="pill '+(pillCls||'')+'">'+esc(stMap[st]||st)+'</span></div>';
+    });
+    box.innerHTML=html;
+    if(sum)sum.textContent='共 '+(meta.COMP_TOTAL||rows.length)+' 个 · 已启用 '+(meta.COMP_ENABLED||'0')+' · 可更新 '+(meta.COMP_UPD||'0')+' · 未安装 '+(meta.COMP_NEW||'0');
+  }catch(e){box.innerHTML='<div class="appempty">读取失败</div>';}
+  busy('btnCompRefresh',false);
+}
+document.getElementById('btnCompRefresh').onclick=loadComponents;
+// 立即结束 GMS / 注入 Widevine / 立即备份：跑对应脚本并把输出打到日志
+async function specterRun(cmd,label){
+  log(label+' ...','info');
+  try{
+    var r=await exec(MODDIR+'/webui.sh '+cmd);
+    (r.stdout||'').split('\n').forEach(function(l){
+      l=l.trim(); if(!l)return;
+      if(l.indexOf('FAIL')>=0||l.indexOf('ERROR')>=0)log(l,'err');
+      else if(l.indexOf('OK')>=0||l.indexOf('DONE')>=0||l.indexOf('SUCCESS')>=0)log(l,'ok');
+      else log(l);
+    });
+  }catch(e){log(label+'异常: '+e.message,'err');}
+  await refresh();
+}
+document.getElementById('btnGmsKill').onclick=function(){specterRun('gms-kill force','立即结束 GMS/DroidGuard');};
+document.getElementById('btnWidevine').onclick=function(){specterRun('widevine-install','注入 Widevine L1');};
+document.getElementById('btnFirstBootBackup').onclick=function(){specterRun('first-boot-backup','首次备份 keybox/target');};
 // ---- v2.8.8 侧信道延迟自检（只读测量）：appinfo.dex statbench in-process stat() 计时 ----
 async function latencyCheck(){
   busy('btnLatency',true,'测量中...');
@@ -2382,6 +2519,7 @@ function showTab(name,keepScroll){
   for(i=0;i<bs.length;i++){bs[i].classList.toggle('on',bs[i].getAttribute('data-tab')===name);}
   try{localStorage.setItem(TAB_KEY,name);}catch(e){}
   if(!keepScroll)window.scrollTo(0,0);
+  if(name==='update' && typeof loadComponents==='function'){try{loadComponents();}catch(e){}}
 }
 (function(){
   var bs=document.querySelectorAll('.navbar button'),i;
