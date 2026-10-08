@@ -199,6 +199,12 @@ mkdir -p "$MODPATH/webroot"
 if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "webroot/index.html"; then
   install_file "webroot/index.html" "$MODPATH/webroot"
   chmod 644 "$MODPATH/webroot/index.html"
+  # Donation QR (WeChat reward). Ships inert: the WebUI only copies it to the
+  # user's storage when they tap the Donate button.
+  if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "webroot/donate.png"; then
+    install_file "webroot/donate.png" "$MODPATH/webroot"
+    chmod 644 "$MODPATH/webroot/donate.png"
+  fi
   # Magisk has no built-in WebUI host. The standalone WebUI app is fetched
   # from GitHub and installed on the first [Action] press (see action.sh).
   if [ "$KSU" != true ] && [ "$APATCH" != true ]; then

@@ -236,7 +236,7 @@ module/                模块本体（AlwaysStrong v1.0.4 骨架 + OMK 适配脚
   ├── soterta.sh       Qualcomm Soter 中继看护（可选，默认关闭）
   ├── engine.sh        PlayIntegrityFork 适配层
   ├── service.sh       服务启动 / 监控 / 注入兜底
-  └── webroot/         WebUI
+  └── webroot/         WebUI（index.html + donate.png 赞赏码）
 native/                asfetch / aswatcher / verifier 源码与预编译产物
 scripts/               构建、清单生成 / 发布、版本升级等脚本
 docs/ADVANCED.md       进阶说明与排障

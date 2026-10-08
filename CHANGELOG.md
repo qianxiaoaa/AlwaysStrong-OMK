@@ -2,6 +2,15 @@
 
 本仓库是在 [AlwaysStrong-OMK](https://github.com/UtMostUR/AlwaysStrong-OMK)（二改）基础上的**三改**版本，三改作者为 **浅笑呐**（Telegram：https://t.me/AlwaysStrongR ）。版本号沿用上游 AlwaysStrong 的 `v1.0.x` 并加 `-omk-rN` 后缀。
 
+## v1.0.5-omk-r6
+
+- 新增**赞赏码**：CHANGELOG 底部展示微信赞赏码，仓库与模块随包内置 `webroot/donate.png`。
+- WebUI「捐赠」按钮改为离线保存内置赞赏码到 `/sdcard/Download/AlwaysStrong-donate.png`，并提示打开微信扫一扫（从相册选图）完成赞赏；不再跳转外部链接。
+
+**Bundled in every build of this release**
+- Keystore: OhMyKeymint `v1.3.5-196-10113e7`
+- Play Integrity: PlayIntegrityFork `v18`
+
 ## v1.0.5-omk-r5
 
 - 新增**签名式组件分发**（Phase 3，参考 yypm 的组件应用商店设计，改为纯 GitHub Actions 实现）：
@@ -586,3 +595,9 @@ r6 的 pin 已经让 KeyMint 实例选择稳定下来（`level-zero KM strategy`
 - 不能与独立 OhMyKeymint 模块同时安装。
 - 从其他 OMK 引擎切换过来的**首次开机**，旧密钥 blob 可能无法解密，
   自愈逻辑会重建私有存储；此时旧应用密钥失效属预期行为。
+
+---
+
+创作不易，感谢支持。
+
+![创作不易，感谢支持。](module/webroot/donate.png)
