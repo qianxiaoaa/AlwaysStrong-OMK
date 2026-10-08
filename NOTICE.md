@@ -114,7 +114,26 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
   - `module/components.sh`：端侧验签、下载、安装（ksud/magisk 或 pm install）。
 - 说明：yypm 无许可证声明；本处为独立实现 + 思路借鉴，并按 POSIX sh 重写，标注来源。
 
+### r7 追加修改（修改日期：2026-10-08）
+
+- **整套移植上游 yypm 的 WebUI 与后端**（此前 r2–r5 只借鉴其设计、自行重写；r7 改为直接
+  移植其脚本与界面，并全部**改指向本项目**）：
+  - 随包分发 `module/common.sh`（yypm 后端核心）、`module/webui.sh`（WebUI 命令入口）、
+    `module/yypm_service.sh`（yypm 主服务循环，重命名避免与本模块 `service.sh` 冲突）、
+    `module/webroot/index.html`（yypm 界面，文案/主题重命名为 AlwaysStrong）、
+    `module/appinfo.dex` + `appinfo.sha256`、`module/detect_risk_apps.txt`、
+    `module/detect_trace_paths.txt`。
+  - 数据/路径重定向：`/data/adb/yypm` → `/data/adb/tricky_store/yypm`，
+    `/data/adb/modules/yypm` → `/data/adb/modules/tricky_store`。
+  - 双信任根：本项目密钥（`module/pubkey.b64`）用于组件/自更新/本项目镜像；
+    上游 yypm 密钥（`module/pubkey.yypm.b64`）仅用于其 mirror/manifest 的 keybox 兜底。
+  - keybox 写入 `/data/adb/tricky_store/keybox.xml` 后经 `omk-sync.sh` 热同步进 OhMyKeymint
+    运行时；组件自动安装默认关闭（WebUI 可开）。
+- 说明：yypm 上游仓库**未声明许可证**。r7 直接移植其脚本文本，属对上游代码的复用，
+  保留原始版权与来源标注；如上游作者有异议，请在仓库 issue 中提出。
+
 上游文件的完整源码见各自仓库；本仓库中未修改的上游脚本保留其原始版权头。
+
 
 ---
 

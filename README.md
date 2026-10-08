@@ -58,7 +58,12 @@ r10 的 `vb_hash` / `vb_key` 钉值通道**在真机上仍未验证过**。
 | Qualcomm Soter | 无 | 可选中继，默认关闭 |
 | Play Integrity | PlayIntegrityFork v18 | PlayIntegrityFork v18（不变） |
 | 指纹自动刷新 | asfetch + aswatcher | 不变 |
-| WebUI / Action | 有 | 不变 |
+| WebUI / Action | 有 | 整套改用 yypm 的界面 + 后端（环境对抗 / 检测整改 / 组件商店），改指向本项目 |
+
+> **三改（r7）**：WebUI 与后端整套移植自 [yangyang8002/yypm](https://github.com/yangyang8002/yypm)
+> 并改指向本项目 —— keybox 走「本项目镜像优先、上游 yypm 兜底」，组件分发与模块自更新指向本仓库；
+> 双信任根（本模块密钥为主，上游 yypm 密钥仅作其 manifest 的 keybox 兜底）；keybox 写入后经
+> `omk-sync.sh` 热同步进 OhMyKeymint 运行时；组件自动安装默认关闭，可在 WebUI「更新」页开启。
 
 ### 本次二改新增的修复
 
