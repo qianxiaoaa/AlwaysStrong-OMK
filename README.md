@@ -1,6 +1,6 @@
 # AlwaysStrong-OMK
 
-## 状态：恢复维护（2026-10-08，v1.0.5-omk-r1）
+## 状态：恢复维护（2026-10-08，v1.0.6-omk-r1）
 
 r10 之前一度停维，原因是当时公开镜像分发的 keybox 被**大规模吊销**，"刷进去就能拿到 STRONG"
 这个前提不成立。r11 起恢复维护：默认 keybox 与指纹来源都换成了新的上游，健康状态判定也完全搬到
@@ -15,7 +15,7 @@ r10 之前一度停维，原因是当时公开镜像分发的 keybox 被**大规
   它的 `vbmeta` 根本没有认证块，引擎如实上报的引导状态对应不到任何已认证构建。
 
 r11 的改动见 [CHANGELOG.md](CHANGELOG.md)：健康状态由模块本地推导（结构 + 引擎存活 +
-Google 吊销名单）。`v1.0.5-omk-r1` 重新起版：撤回 yypm 的 WebUI 与组件商店移植，WebUI 恢复为
+Google 吊销名单）。`v1.0.6-omk-r1` 重新起版：撤回 yypm 的 WebUI 与组件商店移植，WebUI 恢复为
 OMK 原版，指纹来源换回上游原生抓取（flash.android.com + content-flashstation-pa.googleapis.com），
 同时保留 yypm 的**多源 keybox 分发**（yurikey / integritybox / megatron 优先，keyboxhub /
 keyboxstatus 目录轮换兜底，移植为 `module/keybox_sources.sh`）。r10 的 `vb_hash` / `vb_key`

@@ -1,7 +1,7 @@
 id=tricky_store
 name=AlwaysStrong
-version=v1.0.5-omk-r1
-versionCode=10501
+version=v1.0.6-omk-r1
+versionCode=10601
 author=Evokerr, JingMatrix, Enginex0, osm0sis, KOWX712, James Clef, qwq233, ITxiao6666, ZeyolZZZ, yangyang8002
 description=Strong Play Integrity in one drop-in module. OhMyKeymint 1.3.5 + PlayIntegrityFork, multi-source keybox + Pixel profile auto-refreshed. Tap Action.
 support=https://t.me/keyboxstrong

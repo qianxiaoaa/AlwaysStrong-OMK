@@ -73,7 +73,7 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
 - 新增可选的 Qualcomm Soter 中继看护 `soterta.sh`（默认关闭）。
 - keybox 默认来源改为 `ZeyolZZZ/TEESimulator-RS-fix`；模块健康状态改为本地推导，移除对第三方状态镜像的依赖。
 
-### v1.0.5-omk-r1 修改（修改日期：2026-10-08）
+### v1.0.6-omk-r1 修改（修改日期：2026-10-08）
 
 - 撤回三改/yypm 的 WebUI 与组件商店移植：WebUI 恢复为 OMK 原版，组件分发与签名式自更新移除。
 - 保留并重新并入 yypm 的**多源 keybox 采集**：`module/keybox_sources.sh` 移植自
