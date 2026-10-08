@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "generated_at": "2026-10-08T09:10:40Z",
+  "repo": "qianxiaoaa/AlwaysStrong-OMK",
+  "count": 3,
+  "modules": {
+    "Zygisk-Next.zip": {"sha256":"474d58abc208c0779e7f8f1d8449db755a874d475c13b9cf8decf74bc171933b","size":7529581,"url":"https://github.com/LSPosed/ZygiskNext/releases/download/v1.5.0/Zygisk-Next-1.5.0-843-5217106-release.zip","signature":"ueWn0u85q5uX4O9utg3CCkMoznxbgcz5aqGGy4fPNEB6lj3vSanO7vyC3YEa8QNEknwAe+OhNBy9YSlYT3OgBA==","x-type":"ksu-module","x-auto":1,"source":"LSPosed/ZygiskNext","tag":"v1.5.0","x-id":"zygisksu","x-name":"Zygisk Next","x-version":"1.5.0 (843-5217106-release)","x-versionCode":843},
+    "HMA-OSS.zip": {"sha256":"be364502b3d34510c856a742bbb67d91560ec033dcaef06e431991a1ba3a98ec","size":2743824,"url":"https://github.com/frknkrc44/HMA-OSS/releases/download/oss-173/HMA-OSS-ZYGISK-oss-173-release.zip","signature":"FlsJKLd1FMMnWEAbVGcJpPV2Bczh+91cs/YO5Wvhen7AWb20L+4psWc09YXb4N5YI/m/JIZ23b+AWC2KXG2GCg==","x-type":"ksu-module","x-auto":0,"source":"frknkrc44/HMA-OSS","tag":"oss-173","x-id":"hma_oss_zygisk","x-name":"HMA-OSS Zygisk","x-version":"oss-173","x-versionCode":7304656},
+    "FuseFixer.apk": {"sha256":"572ebe7705706b9807271f60b3daf89046712ec102e79d0ac09713b5be7dcb40","size":491739,"url":"https://github.com/5ec1cff/FuseFixer/releases/download/38/FuseFixer-38-3574975-1776151966656-release.apk","signature":"zTUolCbyR5Kk/60ZoawyhzO0kxIRm1gT97RnLWCUkEocQ7iVBo9TSionfvyvDwphBCX0MOWUJ6TJil3hnQ04Ag==","x-type":"apk","x-auto":0,"x-package":"io.github.a13e300.fusefixer","source":"5ec1cff/FuseFixer","tag":"38","x-version":"38"}
+  }
+}
