@@ -61,10 +61,15 @@ fi
 command -v awk >/dev/null 2>&1 || { echo "no awk available"; exit 2; }
 
 # ---- DER serial extractor ------------------------------------------------
-# tbsCertificate.serialNumber, spelled the way the status list spells it: hex,
-# lowercase, no leading zeros. Walk Certificate SEQUENCE -> tbsCertificate
-# SEQUENCE -> optional [0] version -> INTEGER serialNumber, on the hex dump of
-# the DER so no binary handling is needed.
+# tbsCertificate.serialNumber, emitted two ways: lowercase hex with no leading
+# zeros, and its decimal value. Google's attestation/status list (and the
+# mirrors of it) key each entry by the serial's *decimal* value, while older or
+# synthetic lists used hex. Printing both lets the loop below match either.
+# Walk Certificate SEQUENCE -> tbsCertificate SEQUENCE -> optional [0] version
+# -> INTEGER serialNumber, on the hex dump of the DER so no binary handling is
+# needed. The decimal value is built with string arithmetic (muladd/hex2dec):
+# serials are ~128-bit, far past awk's 2^53 integer range, so converting via
+# floating point would silently produce the wrong digits and miss every match.
 DER_AWK='
 function hexval(x,   i, c, v, d, m) {
     v = 0
@@ -89,6 +94,26 @@ function tlv(p,   l0, k) {
         t_content = p + 2 + k
     }
 }
+function muladd(s, m, a,   i, carry, d, res) {
+    carry = a; res = ""
+    for (i = length(s); i >= 1; i--) {
+        d = (substr(s, i, 1) + 0) * m + carry
+        res = (d % 10) res
+        carry = int(d / 10)
+    }
+    while (carry > 0) { res = (carry % 10) res; carry = int(carry / 10) }
+    sub(/^0+/, "", res)
+    if (res == "") res = "0"
+    return res
+}
+function hex2dec(h,   i, d, out) {
+    out = "0"
+    for (i = 1; i <= length(h); i++) {
+        d = index("0123456789abcdef", tolower(substr(h, i, 1))) - 1
+        out = muladd(out, 16, d)
+    }
+    return out
+}
 {
     h = $0
     gsub(/[^0-9a-fA-F]/, "", h)
@@ -105,7 +130,8 @@ function tlv(p,   l0, k) {
     s = substr(h, t_content * 2 + 1, t_len * 2)
     sub(/^0+/, "", s)
     if (s == "") s = "0"
-    print tolower(s)
+    s = tolower(s)
+    print s " " hex2dec(s)
     exit
 }'
 
@@ -128,12 +154,18 @@ HITS=""
 SEEN=0
 while IFS= read -r _line; do
     [ -n "$_line" ] || continue
-    _serial=$(printf '%s' "$_line" | $B64DEC 2>/dev/null | $OD -An -tx1 | tr -d ' \n' | awk "$DER_AWK" 2>/dev/null)
-    case "$_serial" in ''|ERR) continue ;; esac
+    _pair=$(printf '%s' "$_line" | $B64DEC 2>/dev/null | $OD -An -tx1 | tr -d ' \n' | awk "$DER_AWK" 2>/dev/null)
+    case "$_pair" in ''|ERR) continue ;; esac
+    _serial=${_pair% *}
+    _serial_dec=${_pair#* }
     SEEN=$((SEEN + 1))
     # An entry object is flat JSON: {"status":"...","reason":"..."} with no nested
-    # braces, so [^}]* reaches its end.
+    # braces, so [^}]* reaches its end. Prefer the hex key (synthetic/legacy
+    # lists), then fall back to the decimal key that Google and its mirrors use.
     _obj=$(printf '%s' "$FLAT" | grep -o -E "\"$_serial\"[ ]*:[ ]*\{[^}]*\}" | head -n 1)
+    if [ -z "$_obj" ] && [ -n "$_serial_dec" ] && [ "$_serial_dec" != "$_serial" ]; then
+        _obj=$(printf '%s' "$FLAT" | grep -o -E "\"$_serial_dec\"[ ]*:[ ]*\{[^}]*\}" | head -n 1)
+    fi
     [ -n "$_obj" ] || continue
     _status=$(printf '%s' "$_obj" | sed -n 's/.*"status"[ ]*:[ ]*"\([^"]*\)".*/\1/p')
     _reason=$(printf '%s' "$_obj" | sed -n 's/.*"reason"[ ]*:[ ]*"\([^"]*\)".*/\1/p')

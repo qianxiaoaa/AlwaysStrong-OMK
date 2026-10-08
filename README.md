@@ -14,10 +14,11 @@ r10 之前一度停维，原因是当时公开镜像分发的 keybox 被**大规
   `T=TEE`、`Verified`、`deviceLocked: true`、序列号不在名单里。原因是测试机刷的是自定义 ROM，
   它的 `vbmeta` 根本没有认证块，引擎如实上报的引导状态对应不到任何已认证构建。
 
-r11 的改动见 [CHANGELOG.md](CHANGELOG.md)：默认 keybox 改用
-[ZeyolZZZ/TEESimulator-RS-fix](https://github.com/ZeyolZZZ/TEESimulator-RS-fix)，指纹改用
+r2 的改动见 [CHANGELOG.md](CHANGELOG.md)：keybox 采集改为**多源池**（移植 yypm 的
+`sources.php` —— yurikey / integritybox / megatron 优先，keyboxhub / keyboxstatus 目录轮换兜底，
+按优先级 + 吊销过滤择优），指纹来自
 [Elcapitanoe/PIF-Config-Generator](https://github.com/Elcapitanoe/PIF-Config-Generator) 的稳定
-Pixel 档案，健康状态由模块本地推导（结构 + 引擎存活 + Google 吊销名单），不再依赖第三方镜像。
+Pixel 档案，健康状态由模块本地推导（结构 + 引擎存活 + Google 吊销名单）。
 r10 的 `vb_hash` / `vb_key` 钉值通道**在真机上仍未验证过**。
 
 ---
@@ -51,7 +52,7 @@ r10 的 `vb_hash` / `vb_key` 钉值通道**在真机上仍未验证过**。
 | 引擎守护 | 无（引擎自管） | `omk-daemon` + `omk-injector` |
 | 早期初始化 | 无 | `omk-early.sh`（post-fs-data 阶段） |
 | 配置桥接 | 无 | `omk-sync.sh`（镜像到 `/data/adb/tricky_store`） |
-| keybox 来源 | 无 | ZeyolZZZ 的 `TEESimulator-RS-fix/module/keybox.xml` |
+| keybox 来源 | 无 | 多源池：yurikey / integritybox / megatron + keyboxhub / keyboxstatus（移植自 yypm） |
 | PIF 指纹档案 | 上游 autopif | Elcapitanoe 的 PIF-Config-Generator 稳定档案 |
 | 健康状态 | 无 | 本地推导：结构 + 引擎存活 + Google 吊销名单 |
 | Qualcomm Soter | 无 | 可选中继，默认关闭 |
@@ -95,7 +96,7 @@ r10 的 `vb_hash` / `vb_key` 钉值通道**在真机上仍未验证过**。
 |---|---|---|
 | OhMyKeymint | `1.3.5-196-10113e7` | [ITxiao6666/OhMyKeymint](https://github.com/ITxiao6666/OhMyKeymint) |
 | PlayIntegrityFork | `v18` | [osm0sis/PlayIntegrityFork](https://github.com/osm0sis/PlayIntegrityFork) |
-| keybox | ZeyolZZZ `module/keybox.xml` | [ZeyolZZZ/TEESimulator-RS-fix](https://github.com/ZeyolZZZ/TEESimulator-RS-fix) |
+| keybox | 多源池（yurikey / integritybox / megatron + keyboxhub / keyboxstatus） | [yangyang8002/yypm](https://github.com/yangyang8002/yypm) 的 `php-server/lib/sources.php` |
 | PIF 指纹档案 | 最新稳定 Pixel 档案 | [Elcapitanoe/PIF-Config-Generator](https://github.com/Elcapitanoe/PIF-Config-Generator) |
 | AlwaysStrong 骨架 | `v1.0.4` | [evoker0/AlwaysStrong](https://github.com/evoker0/AlwaysStrong) |
 | asfetch / aswatcher | 随 AlwaysStrong v1.0.4 | 同上 |
@@ -188,7 +189,8 @@ module/                模块本体（AlwaysStrong v1.0.4 骨架 + OMK 适配脚
   ├── omk-injector     注入器包装：等待 RPC、失败重试
   ├── omk-early.sh     post-fs-data 阶段：清理跨开机残留标记
   ├── omk-sync.sh      配置桥接：OMK 配置面 ←→ /data/adb/tricky_store
-  ├── keybox_fetch.sh  keybox 拉取（ZeyolZZZ，XML / base64 兼容）
+  ├── keybox_fetch.sh  keybox 拉取：多源池择优 + 变更检测 + 原子落盘
+  ├── keybox_sources.sh  多源采集（yypm 移植）：base64 / hex / 10 轮嵌套解码 + 目录轮换
   ├── keybox_check.sh  keybox 结构校验（接受 dual / RSA-only / EC-only）
   ├── keybox_revoke_check.sh  对缓存的 Google 吊销名单比对序列号
   ├── pif_native_fetch.sh  从 PIF-Config-Generator 取最新稳定 Pixel 档案

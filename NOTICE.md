@@ -12,6 +12,7 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
 | OhMyKeymint | `1.3.5-196-10113e7`（ITxiao6666 分支） | qwq233、ITxiao6666 及贡献者 | AGPL-3.0-or-later + 附加条款 | https://github.com/ITxiao6666/OhMyKeymint |
 | AlwaysStrong | `v1.0.4` | Evokerr (evoker0) 及贡献者 | GPL-3.0 | https://github.com/evoker0/AlwaysStrong |
 | PlayIntegrityFork | `v18` | osm0sis 及贡献者 | GPL-3.0 | https://github.com/osm0sis/PlayIntegrityFork |
+| yypm | 未标注版本 | yangyang8002 及贡献者 | 未声明（上游仓库无 LICENSE 文件） | https://github.com/yangyang8002/yypm |
 
 许可证全文：
 
@@ -72,6 +73,18 @@ GPL-3.0 §5 / AGPL-3.0 §5 的「标明修改」义务与 AGPL-3.0 §13 的组�
 - 新增可选的 Qualcomm Soter 中继看护 `soterta.sh`（默认关闭）。
 - keybox 默认来源改为 `ZeyolZZZ/TEESimulator-RS-fix`；PIF 指纹档案来源改为
   `Elcapitanoe/PIF-Config-Generator`；模块健康状态改为本地推导，移除对第三方状态镜像的依赖。
+
+### r2 追加修改（修改日期：2026-10-08）
+
+- keybox 采集移植 **yypm**（`php-server/lib/sources.php`、`config.php` 的多源配置、
+  `lib/revocation.php` 的镜像顺序），改写为设备端 `module/keybox_sources.sh`：
+  源列表、`base64` / `multi_base64_hex_rot13` / `hex_base64` 解码、GitHub 目录轮换取样、
+  优先级 + 吊销择优逻辑均源自 yypm，按 POSIX sh 与 Magisk/KSU 环境重写。
+- 吊销名单增加 `purainity` / `KimmyXYC` 镜像，保留 Google 官方兜底；`status_fetch.sh`
+  同步。修复 `keybox_revoke_check.sh`：官方名单以序列号**十进制**为键，旧的十六进制匹配
+  在真实名单上永远判不出吊销。
+- 说明：yypm 上游仓库**未声明许可证**。本仓库对其逻辑的移植仅作功能复用并在此标注来源，
+  著作权归原仓库作者；若原作者有异议，可移除相应实现。
 
 上游文件的完整源码见各自仓库；本仓库中未修改的上游脚本保留其原始版权头。
 

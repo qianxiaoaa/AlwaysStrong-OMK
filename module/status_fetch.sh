@@ -38,9 +38,13 @@ KB="$CONFIG_DIR/keybox.xml"
 
 # Google's attestation status list — the same public endpoint keybox_fetch.sh
 # checks against when it installs a key. Cached here so the hourly status pass
-# does not pull ~180 KB every time; KEYBOX_STATUS_URL overrides it (mirrors the
-# env var the fetch script already honours).
-STATUS_URL="${KEYBOX_STATUS_URL:-https://android.googleapis.com/attestation/status}"
+# does not pull ~180 KB every time. Mirrors come first (the official host is
+# unreachable from some networks; the mirrors sync via their own GitHub Actions
+# and usually lag only a few hours), official last. KEYBOX_STATUS_URL overrides
+# the whole list with a single URL.
+STATUS_MIRRORS="purainity|https://raw.githubusercontent.com/purainity/keybox-tools/main/res/status.json
+kimmyxyc|https://raw.githubusercontent.com/KimmyXYC/KeyboxChecker/main/res/json/status.json
+google|https://android.googleapis.com/attestation/status"
 LIST="$CONFIG_DIR/.kb_status_list"
 LIST_TTL=86400   # 24h
 
@@ -167,7 +171,23 @@ if [ -s "$LIST" ]; then
     [ -n "$_age" ] && [ "$_age" -lt "$LIST_TTL" ] && need_list=0
 fi
 if [ "$need_list" = 1 ]; then
-    fetch_to "$LIST.tmp" "$STATUS_URL" && mv -f "$LIST.tmp" "$LIST" || rm -f "$LIST.tmp"
+    if [ -n "$KEYBOX_STATUS_URL" ]; then
+        _sources="$KEYBOX_STATUS_URL"
+    else
+        _sources="$STATUS_MIRRORS"
+    fi
+    # A truncated body (error page / rate limit) parses to no "entries" — skip it
+    # and try the next source rather than caching a broken list. A stale-but-real
+    # list already on disk is left untouched when every source fails.
+    printf '%s\n' "$_sources" | while IFS='|' read -r _nm _u; do
+        [ -n "$_u" ] || continue
+        rm -f "$LIST.tmp"
+        if fetch_to "$LIST.tmp" "$_u" && grep -q '"entries"' "$LIST.tmp" 2>/dev/null; then
+            mv -f "$LIST.tmp" "$LIST"
+            break
+        fi
+    done
+    rm -f "$LIST.tmp"
 fi
 
 REV_STATE=2   # 0 ok, 1 revoked, 2 unknown

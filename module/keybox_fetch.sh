@@ -1,14 +1,18 @@
 #!/system/bin/sh
 # AlwaysStrong — keybox auto-fetch.
 #
-# Downloads a keybox from a mirror, detects whether it changed since the last
-# apply, validates that the payload is a usable keybox, then atomically replaces
-# the target file. The default source is ZeyolZZZ's TEESimulator-RS-fix
-# repository, which serves a raw keybox.xml; a base64-encoded payload (the
-# legacy .../key mirror) is still detected and decoded, so an override that
-# points at one keeps working.
+# Collects a keybox from a pool of upstream sources (ported from yypm's PHP
+# server: php-server/lib/sources.php). keybox_sources.sh walks the pool in
+# priority order, decodes each candidate, and returns the first that passes both
+# the structural check and Google's revocation list. This replaces the old
+# single-mirror default (ZeyolZZZ), which had exactly the failure modes a pool
+# fixes: it could go stale, serve a revoked key, or disappear.
 #
-# Source override:
+# This script then detects whether the collected keybox differs from the one on
+# disk, and atomically replaces it. The existing keybox is preserved on any
+# failure — a stale-but-working key beats no key.
+#
+# Source override (a single user-pinned source bypasses the pool):
 #   KEYBOX_URL        full URL to a raw keybox.xml or a base64 blob
 #   KEYBOX_BASE_URL   legacy mirror root; the key is fetched from <root>/key
 #
@@ -24,7 +28,8 @@ if [ -n "$KEYBOX_URL" ]; then
 elif [ -n "$KEYBOX_BASE_URL" ]; then
     KEY_URL="$KEYBOX_BASE_URL/key"
 else
-    KEY_URL="https://raw.githubusercontent.com/ZeyolZZZ/TEESimulator-RS-fix/main/module/keybox.xml"
+    # Empty on purpose: the multi-source pool (keybox_sources.sh) is the default.
+    KEY_URL=""
 fi
 
 # Google's attestation revocation list. The mirror is a shared key, so it is
@@ -34,7 +39,7 @@ fi
 # Google's servers. Read the same list before trusting a downloaded key.
 STATUS_URL="${KEYBOX_STATUS_URL:-https://android.googleapis.com/attestation/status}"
 
-CONFIG_DIR=/data/adb/tricky_store
+CONFIG_DIR="${CONFIG_DIR:-/data/adb/tricky_store}"
 TARGET="$CONFIG_DIR/keybox.xml"
 
 log() { echo "keybox_fetch: $*"; }
@@ -44,11 +49,6 @@ log() { echo "keybox_fetch: $*"; }
 if [ -f "$CONFIG_DIR/custom_keybox" ]; then
     log "custom keybox active — skipping fetch."
     exit 2
-fi
-
-if [ -z "$KEY_URL" ]; then
-    log "no keybox source configured — skipping."
-    exit 1
 fi
 
 # ---- Resolve tools ----
@@ -147,53 +147,70 @@ else
 fi
 [ -z "$SHA256" ] && { log "no sha256sum available."; exit 1; }
 
-# ---- Fetch ----
+# ---- Fetch + decode ----
 mkdir -p "$CONFIG_DIR"
 TMP="$CONFIG_DIR/.keybox_fetch.$$"
 mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
-try_fetch "$TMP/key" "$KEY_URL" || { log "download failed on all engines ($KEY_URL)"; exit 1; }
+# fetch_single URL — the override path: one pinned source, decoded inline. The
+# payload is compared byte-for-byte against the file on disk later, regardless
+# of cache, so a manual swap underneath us is still caught. Anything that
+# already looks like XML is used as-is; base64 never contains '<', so the first
+# bytes decide whether it is the raw or the legacy base64 mirror.
+fetch_single() {
+    try_fetch "$TMP/key" "$1" || return 1
+    [ -s "$TMP/key" ] || return 1
+    if head -c 256 "$TMP/key" | grep -q '<'; then
+        cp -f "$TMP/key" "$TMP/keybox.xml" 2>/dev/null
+    else
+        $B64DEC < "$TMP/key" > "$TMP/keybox.xml" 2>/dev/null || true
+    fi
+    [ -s "$TMP/keybox.xml" ]
+}
 
-if [ ! -s "$TMP/key" ]; then
-    log "downloaded file is empty."
-    exit 1
-fi
-
-# ---- Decode ----
-# Always materialise the payload, regardless of cache state. That way we can
-# compare the upstream XML byte-for-byte against the file currently on disk —
-# which catches the "user manually swapped the keybox under us" case that a
-# STATE-file-based cache would miss. A payload that already looks like XML is
-# used as-is (the default raw mirror); anything else is treated as base64 (the
-# legacy .../key mirror). Base64 never contains '<', so the first bytes decide.
-if head -c 256 "$TMP/key" | grep -q '<'; then
-    cp -f "$TMP/key" "$TMP/keybox.xml" 2>/dev/null
+KB_SRC="$SELF_DIR/keybox_sources.sh"
+if [ -n "$KEY_URL" ]; then
+    fetch_single "$KEY_URL" || { log "download failed on all engines ($KEY_URL)"; exit 1; }
+elif [ -f "$KB_SRC" ]; then
+    # Default: the multi-source pool. The helper does its own structural and
+    # revocation filtering and prints the chosen source name on stdout.
+    if sh "$KB_SRC" collect "$TMP/keybox.xml" >"$TMP/kbsrc.name" 2>"$TMP/kbsrc.log"; then
+        log "source: $(cat "$TMP/kbsrc.name" 2>/dev/null)"
+    else
+        sed 's/^/keybox_fetch: /' "$TMP/kbsrc.log" 2>/dev/null
+        log "multi-source collection found no usable keybox — keeping the one on disk."
+        exit 1
+    fi
 else
-    $B64DEC < "$TMP/key" > "$TMP/keybox.xml" 2>/dev/null || true
+    # Partial install (helper missing): legacy single mirror as a last resort.
+    fetch_single "https://raw.githubusercontent.com/ZeyolZZZ/TEESimulator-RS-fix/main/module/keybox.xml" \
+        || { log "download failed on all engines (legacy mirror)"; exit 1; }
 fi
+
 if [ ! -s "$TMP/keybox.xml" ]; then
-    log "downloaded payload is neither XML nor decodable base64 — bad payload."
+    log "downloaded payload is empty."
     exit 1
 fi
 
 # ---- Validate ----
-# Structure, not the "Keybox" substring: keymint rejects a document it cannot
-# parse and then rewrites its own bundled template instead of keeping the file
-# that was there, which takes every verdict down with it. A payload that only
-# looks like a keybox is therefore worse than no update at all, so it never
-# reaches $TARGET.
+# keybox_sources.sh already ran this on the pool path, but keep it here: it
+# guards the override path, and it is cheap insurance against a helper that let
+# something keymint would reject through. Structure, not the "Keybox" substring:
+# keymint rejects a document it cannot parse and then rewrites its own bundled
+# template instead of keeping the file that was there, taking every verdict down
+# with it.
 KB_CHECK="$SELF_DIR/keybox_check.sh"
 if [ -f "$KB_CHECK" ]; then
     _why=$(sh "$KB_CHECK" "$TMP/keybox.xml" 2>&1)
     if [ $? -ne 0 ]; then
-        log "downloaded keybox is unusable — keeping the one on disk."
+        log "collected keybox is unusable — keeping the one on disk."
         [ -n "$_why" ] && log "reason: $(printf '%s' "$_why" | tr '\n' ';')"
         exit 1
     fi
 elif ! head -c 4096 "$TMP/keybox.xml" | grep -q "Keybox"; then
     # checker missing (partial install) — keep the old substring test as a floor
-    log "decoded payload does not look like a keybox — discarding."
+    log "collected payload does not look like a keybox — discarding."
     exit 1
 fi
 
@@ -218,17 +235,25 @@ fi
 # a usable key is not applied.
 KB_REVOKE="$SELF_DIR/keybox_revoke_check.sh"
 if [ -f "$KB_REVOKE" ]; then
-    if try_fetch "$TMP/status.json" "$STATUS_URL"; then
-        _rev=$(sh "$KB_REVOKE" "$TMP/keybox.xml" "$TMP/status.json" 2>&1)
+    # Reuse the mirror-refreshed cache keybox_sources.sh just wrote when present;
+    # only fall back to a direct fetch when there is no cache at all. This keeps
+    # the final gate on the same list the collection used (and avoids a second
+    # pull). An empty list is not a verdict, so the check fails open.
+    STATUS_LIST="$CONFIG_DIR/.kb_status_list"
+    if [ ! -s "$STATUS_LIST" ]; then
+        try_fetch "$TMP/status.json" "$STATUS_URL" && STATUS_LIST="$TMP/status.json"
+    fi
+    if [ -s "$STATUS_LIST" ]; then
+        _rev=$(sh "$KB_REVOKE" "$TMP/keybox.xml" "$STATUS_LIST" 2>&1)
         _rrc=$?
         if [ "$_rrc" = 1 ]; then
-            log "downloaded keybox is REVOKED by Google — keeping the one on disk."
+            log "collected keybox is REVOKED by Google — keeping the one on disk."
             printf '%s\n' "$_rev" | sed 's/^/keybox_fetch: /' >&2
             exit 1
         fi
         [ "$_rrc" = 0 ] || log "revocation check inconclusive — proceeding."
     else
-        log "could not fetch Google's revocation list — skipping the revocation check."
+        log "no revocation list available — skipping the revocation check."
     fi
 fi
 

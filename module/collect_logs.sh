@@ -18,9 +18,10 @@ MODDIR=$(cd "${0%/*}" 2>/dev/null && pwd)
 # section isn't blank when someone runs the script from /sdcard or /tmp)
 [ -f "$MODDIR/module.prop" ] || MODDIR=/data/adb/modules/tricky_store
 CFG=/data/adb/tricky_store
-# Keybox source, resolved the same way keybox_fetch.sh resolves it, so the
-# probe below tests the host the module actually pulls from. The default is
-# ZeyolZZZ's TEESimulator-RS-fix repo, which serves a raw keybox.xml.
+# Keybox source probe. The module now pulls from a multi-source pool
+# (keybox_sources.sh: yurikey/integritybox/megatron, then keyboxhub/keyboxstatus
+# collection repos), so without an override this probes the priority-1 host —
+# the same raw.githubusercontent.com the pool hits first.
 KEYBOX_URL="${KEYBOX_URL:-}"
 KEYBOX_BASE_URL="${KEYBOX_BASE_URL:-}"
 if [ -n "$KEYBOX_URL" ]; then
@@ -28,7 +29,7 @@ if [ -n "$KEYBOX_URL" ]; then
 elif [ -n "$KEYBOX_BASE_URL" ]; then
     KURL_SRC="$KEYBOX_BASE_URL/key"
 else
-    KURL_SRC="https://raw.githubusercontent.com/ZeyolZZZ/TEESimulator-RS-fix/main/module/keybox.xml"
+    KURL_SRC="https://raw.githubusercontent.com/Yurii0307/yurikey/main/key"
 fi
 KEY_HOST=$(echo "$KURL_SRC" | sed -e 's#^[a-z]*://##' -e 's#/.*##' -e 's#:.*##')
 STATUS_URL="${KEYBOX_STATUS_URL:-https://android.googleapis.com/attestation/status}"
