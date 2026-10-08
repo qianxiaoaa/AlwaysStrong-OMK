@@ -42,7 +42,8 @@ new_code=$(( (MA * 100 + MI * 10 + PA) * 100 + new_rev ))
 
 # Notes: the upstream summary lines, then the exact bundled versions.
 notes=""
-[[ -s "$SUMMARY" ]] && notes=$(sed 's/^/- /' "$SUMMARY")
+# Normalise summary into a bullet list: drop blank lines, avoid double "- -".
+[[ -s "$SUMMARY" ]] && notes=$(sed -e '/^[[:space:]]*$/d' -e 's/^[[:space:]]*-[[:space:]]*//' -e 's/^/- /' "$SUMMARY")
 [[ -n "$notes" ]] || notes="- Maintenance and upstream refresh."
 
 pin() { sed -n "s/^$1=\"\{0,1\}//p" "$ROOT/build.sh" | head -1 | sed 's/"$//'; }

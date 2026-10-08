@@ -5,12 +5,11 @@
 ## v1.0.5-omk-r4
 
 - 新增**签名式自更新**（Phase 2，参考 yypm 的 Ed25519 清单/验签设计，改为纯 GitHub Actions 实现）：
-- 
-- - 端侧验签工具 `verify_tool`（Go，随包 4 个 ABI），信任根为随包分发的 Ed25519 公钥 `module/pubkey.b64` / `pubkey.fp`。
-- - `scripts/gen-manifest.py` 生成签名清单；`.github/workflows/manifest.yml` 对 release zip 签名，产出 `manifest.json` 并发布到 release 资产与 `mirror-data` 分支。
-- - `module/self_update.sh`：拉取镜像清单 → 比对 versionCode → 下载 → sha256 + Ed25519 验签 → 交 root 管理器安装。
-- - 自动检查每 24 小时一次（`service.sh` 内节流，`no_auto_update` 可关）；WebUI 新增「更新」按钮，支持 `action.sh update`。
-- - 私钥仅存于仓库 Secret `ALWAYSSTRONG_SIGNING_KEY`，不进仓库。
+  - 端侧验签工具 `verify_tool`（Go，随包 4 个 ABI），信任根为随包分发的 Ed25519 公钥 `module/pubkey.b64` / `pubkey.fp`。
+  - `scripts/gen-manifest.py` 生成签名清单；`.github/workflows/manifest.yml` 对 release zip 签名，产出 `manifest.json` 并发布到 release 资产与 `mirror-data` 分支。
+  - `module/self_update.sh`：拉取镜像清单 → 比对 versionCode → 下载 → sha256 + Ed25519 验签 → 交 root 管理器安装。
+  - 自动检查每 24 小时一次（`service.sh` 内节流，`no_auto_update` 可关）；WebUI 新增「更新」按钮，支持 `action.sh update`。
+  - 私钥仅存于仓库 Secret `ALWAYSSTRONG_SIGNING_KEY`，不进仓库。
 
 **Bundled in every build of this release**
 - Keystore: OhMyKeymint `v1.3.5-196-10113e7`
