@@ -65,3 +65,17 @@ This file records user instructions, preferences, and teachings for reference in
   - Component index (P3): `packages/sources.json` lists components; `scripts/gen-packages.py` resolves upstream releases and emits `packages.json` + `packages.json.sig` (detached Ed25519 over the exact index bytes, same key/secret as the module manifest). Publish with `ALWAYSSTRONG_SIGNING_KEY=... GH_TOKEN=... MIRROR_REMOTE=<remote> bash scripts/publish-packages.sh <owner/repo>`; the scheduled `.github/workflows/packages.yml` does it automatically. Device client is `module/components.sh` (verify index -> per-package sha256+signature -> ksud/magisk or pm install -r).
   - Component auto-install is OFF by default: enable with `touch $CONFIG_DIR/components_auto` (modules flagged `x-auto`) and `touch $CONFIG_DIR/components_allow_apk` for APKs; `no_components` disables the whole feature.
   - NOTE (r7): the yypm backend (`module/common.sh` + `module/webui.sh` + `module/yypm_service.sh`) is now the single automatic owner of keybox fetch, component distribution and module self-update; `module/service.sh` no longer fetches them on its timer. The `auto_install` key in `/data/adb/tricky_store/yypm/config.prop` (WebUI "附属模块更新" switch, `webui.sh auto-install on|off`) gates *automatic* installs of `x-auto=1` entries; the manual "一键安装" (`webui.sh install-all`) is not gated. Component installs still verify the packages index + per-package sha256/Ed25519.
+
+[User Instruction Summary]
+- Date: 2026-10-08
+- Context: User asked to commit/push the restarted AlwaysStrong-OMK baseline to GitHub
+- Instructions:
+  - GitHub 提交不得出现机器人署名：设置 repo 级 `user.name` / `user.email` 为 `qianxiaoaa <qianxiaoaa@users.noreply.github.com>`，提交信息不要带 `Co-authored-by: monkeycode-ai`。
+
+[Project Knowledge Summary]
+- Date: 2026-10-08
+- Context: Discovered by Agent while tagging the restarted baseline
+- Category: Workflow & Collaboration
+- Instructions:
+  - origin（qianxiaoaa/AlwaysStrong-OMK）上已存在旧 三改 线的标签 `v1.0.5-omk-r1..r7`（`v1.0.5-omk-r1`=f59b8fb，r2..r7 从其派生）。重新起版时不要复用 `v1.0.5-omk-rN`，已改用 `v1.0.6-omk-r1`（versionCode 10601）。
+  - 发布用 `curl` + `/root/.netrc` 的 token（`Authorization: token $TOKEN`）：`POST /repos/qianxiaoaa/AlwaysStrong-OMK/releases` 建 release，再把 zip 以 `Content-Type: application/zip` POST 到其 `upload_url`。
